@@ -6,7 +6,7 @@ A full ROS 2 (Humble) middleware stack ported to RTEMS 6.1 RTOS (ARM realview_pb
 
 | | |
 |---|---|
-| **Owner (负责人)** | siweimutong |
+| **Developer (开发人员)** | siweimutong |
 | **Contact (联系方式)** | luoxiantong@bjut.edu.cn |
 | **License** | Apache-2.0 |
 
@@ -77,9 +77,9 @@ This project ports the complete ROS 2 (Humble) core middleware stack to RTEMS 6.
 
 The prerequisite RTEMS environment can be deployed in the following ways. Full
 step-by-step documents are provided in:
-- [RTEMS-README.md](RTEMS-README.md) — RTEMS 6 container build for Phytium
-  D2000 (`a53_lp64_qemu` BSP) and QEMU execution
-  (source: <https://github.com/HaochunLiang/RTContainer>).
+- [HaochunLiang/RTContainer](https://github.com/HaochunLiang/RTContainer) —
+  RTEMS 6 container build for Phytium D2000 (`a53_lp64_qemu` BSP)
+  and QEMU execution.
 
 ### 2.1 RTEMS Quick-Start (From Scratch, Ubuntu 22.04)
 
@@ -122,8 +122,8 @@ built with `RTcolcon` — see Section 3.2 for details.
 ### 2.2 RTEMS 6 for Phytium D2000 (aarch64)
 
 A ready-made RTEMS 6 development container targeting the Phytium D2000
-(`aarch64/a53_lp64_qemu` BSP, condensed from
-[RTEMS-README.md](RTEMS-README.md)):
+(`aarch64/a53_lp64_qemu` BSP, source:
+<https://github.com/HaochunLiang/RTContainer>):
 
 ```bash
 # pull the RTEMS6 development environment and start the container
@@ -133,7 +133,7 @@ docker exec -it -e "TERM=xterm-256color" rtems6-dev bash
 
 # fetch the Phytium-version RTEMS source and configure the BSP
 cd /usr/src
-git clone https://github.com/The-Lyc/RTContainer.git rtems6
+git clone https://github.com/HaochunLiang/RTContainer.git rtems6
 cd rtems6
 cat << EOF > config.ini
 [DEFAULT]

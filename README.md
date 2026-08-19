@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| **负责人** | siweimutong |
+| **开发人员** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
 | **开源协议** | Apache-2.0 |
 
@@ -30,7 +30,7 @@
 
 环境部署的详细步骤请参阅：
 
-- **RTEMS 6 容器（Phytium D2000 / aarch64）**：见 [RTEMS-README.md](RTEMS-README.md)
+- **RTEMS 6 容器（Phytium D2000 / aarch64）**：[HaochunLiang/RTContainer](https://github.com/HaochunLiang/RTContainer)
   —— 基于 `roker405/rtems6-env:v1.0` 镜像的 `a53_lp64_qemu` BSP 构建与 QEMU 运行；
 - **开箱即用的 Docker 开发环境（推荐）**：见 [README-en.md](README-en.md) 第 2 章
   —— `roker405/rtems6-env:v1.0` 镜像已包含完整工具链、BSP 与 QEMU。
@@ -72,7 +72,7 @@
 
 每个实验工程内含 `build_all.sh`（编译）、`run.sh`（QEMU 运行）、`wscript`（构建规格）、
 `src/`（源码）、`include/`（头文件）、`Result/`（实验结果 CSV）。
-各工程 README 均标注了负责人与联系方式。
+各工程 README 均标注了开发人员与联系方式。
 
 ## 快速开始
 

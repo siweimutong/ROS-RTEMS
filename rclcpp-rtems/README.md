@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **负责人** | siweimutong |
+| **开发人员** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
 
 Forked from rclcpp-rtss25.  Adds DDS / inter-process notification support

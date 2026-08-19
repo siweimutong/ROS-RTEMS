@@ -6,7 +6,7 @@ RT-ROS（EventsCBGExecutor）独立基准工程：基于事件触发的回调组
 
 | 项目 | 内容 |
 |------|------|
-| 负责人 | siweimutong |
+| 开发人员 | siweimutong |
 | 联系方式 | luoxiantong@bjut.edu.cn |
 
 ## 文件说明

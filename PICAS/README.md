@@ -6,7 +6,7 @@ PiCAS（Priority-driven Chain-Aware Scheduling）调度器独立基准工程。
 
 | 项目 | 内容 |
 |------|------|
-| 负责人 | siweimutong |
+| 开发人员 | siweimutong |
 | 联系方式 | luoxiantong@bjut.edu.cn |
 
 ## 文件说明

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **负责人** | siweimutong |
+| **开发人员** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
 
 This repository contains the source code for the ROS Client Library for C++ package, included with a standard install of any ROS 2 distro.

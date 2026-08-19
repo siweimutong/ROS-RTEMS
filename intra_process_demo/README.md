@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **负责人** | siweimutong |
+| **开发人员** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
 
 通过 RTEMS 6.1 的 `rtems_timer_fire_after` 在 Clock Tick ISR 上下文中触发定时回调，经由 RTEMS 设备驱动框架投递到应用层，驱动 ROS2 定时回调逻辑。

@@ -6,7 +6,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 负责人 | siweimutong |
+| 开发人员 | siweimutong |
 | 联系方式 | luoxiantong@bjut.edu.cn |
 | 实验类型 | 进程内调度策略对比 |
 | 调度策略 | SingleThreaded |

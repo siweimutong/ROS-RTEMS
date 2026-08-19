@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **负责人** | siweimutong |
+| **开发人员** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
 
 ## 1. Implementation of Priority-Driven Chain-Aware scheduling

@@ -7,7 +7,7 @@ RTExecutor 独立基准工程：验证由 RTEMS 内核原生回调调度驱动�
 
 | 项目 | 内容 |
 |------|------|
-| 负责人 | siweimutong |
+| 开发人员 | siweimutong |
 | 联系方式 | luoxiantong@bjut.edu.cn |
 
 ## 文件说明
