@@ -1,0 +1,20 @@
+{
+  "package_name": "rosidl_generator_cpp",
+  "non_idl_tuples": [
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Arrays.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/BasicTypes.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/BoundedPlainSequences.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/BoundedSequences.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Constants.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Defaults.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Empty.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/MultiNested.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Nested.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/Strings.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/UnboundedSequences.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:msg/WStrings.msg",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:srv/Arrays.srv",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:srv/BasicTypes.srv",
+    "/home/oliver/ros2_humble/install/test_interface_files/share/test_interface_files:srv/Empty.srv"
+  ]
+}

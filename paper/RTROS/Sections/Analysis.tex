@@ -1,0 +1,129 @@
+\section{Response-Time Analysis}
+
+This section derives the response-time bounds for callbacks managed by RTExecutor.
+Since the nested scheduling structure is eliminated---all callbacks execute as RTEMS tasks under a single fixed-priority preemptive scheduler---classic real-time scheduling theory becomes directly applicable.
+
+\subsection{Scheduling Model}
+
+We adopt the following assumptions:
+\begin{enumerate}
+    \item The RTEMS kernel employs fixed-priority preemptive scheduling with FIFO tie-breaking (FP-FIFO) on a single-core processor.
+    \item Each ROS~2 callback $\gamma_i$ in the callback set $\Gamma = \{\gamma_1, \gamma_2, \dots, \gamma_n\}$ is mapped to a dedicated RTEMS task $\tau_i$ with priority $\pi_i$, period $T_i$, worst-case execution time $C_i$, and relative deadline $D_i$.
+    \item Priorities are distinct and assigned according to the rate-monotonic policy: a shorter period implies a higher priority.
+    \item RTEMS priority inheritance is enabled on all shared resources (e.g., the \texttt{RtsemQueue}), bounding priority inversion.
+\end{enumerate}
+
+Because RTExecutor delegates all scheduling decisions to the RTEMS kernel, the middleware-layer scheduler no longer exists as an independent scheduling entity.
+Consequently, the response-time analysis degenerates to the well-studied classic fixed-priority preemptive scheduling model, and no Executor-level blocking terms need to be accounted for.
+
+\subsection{Timer Callback Response Time}
+
+\subsubsection{Release Model}
+
+The TimeManager releases timer callbacks through the following chain:
+\begin{equation}
+    \text{HW tick interrupt} \;\to\; \text{Watchdog expiration} \;\to\; \text{Timer Server notification} \;\to\; \text{Worker execution}.
+\end{equation}
+At each clock tick, the Clock Tick ISR fires and inspects the RTEMS Watchdog red-black tree.
+If a timer's expiration time has been reached, the Timer Server task is notified, which in turn signals the corresponding Worker task via an RTEMS event or semaphore.
+The Worker task then executes the registered timer callback.
+
+\subsubsection{Release Jitter}
+
+The timer callback release suffers from jitter $J_i^{\mathrm{timer}}$ bounded by:
+\begin{equation}
+    J_i^{\mathrm{timer}} \leqslant 2 \; \text{ticks}.
+\end{equation}
+This bound arises from four sources:
+\begin{itemize}
+    \item \textbf{Tick quantization error} ($\leqslant 1$~tick): The hardware timer fires at the next tick boundary after the requested expiration time, which may be up to one tick early or late relative to the ideal release instant.
+    \item \textbf{ISR execution delay}: The Clock Tick ISR must traverse the Watchdog red-black tree; the traversal time adds a bounded delay before the Timer Server is notified.
+    \item \textbf{Timer Server context switch}: The Timer Server task must be dispatched by the scheduler before it can signal the Worker task.
+    \item \textbf{Worker notification}: The \texttt{rtems\_event\_send} operation and the subsequent context switch to the Worker task contribute at most one additional tick of delay.
+\end{itemize}
+In our experimental platform (ARM \texttt{realview\_pbx\_a9\_qemu} with $\text{CONFIGURE\_MICROSECONDS\_PER\_TICK} = 1000$), the measured jitter lies in the range $[0,\,2]$~ticks (i.e., 0--2~ms), confirming the bound.
+
+\subsubsection{Response-Time Bound}
+
+Under the FP-FIFO scheduling model with release jitter, the worst-case response time $R_i$ of a timer callback $\gamma_i$ satisfies the following recurrent equation:
+\begin{equation}
+    R_i = C_i + \sum_{j \in hp(i)} \left\lceil \frac{R_i + J_j}{T_j} \right\rceil \times C_j + B_i,
+    \label{eq:rta-timer}
+\end{equation}
+where $hp(i)$ denotes the set of callbacks with higher priority than $\gamma_i$, $J_j$ is the release jitter of callback $\gamma_j$, and $B_i$ is the worst-case blocking time due to priority inversion on shared resources protected by priority-inheritance semaphores.
+The recurrence is solved iteratively starting from $R_i^{(0)} = C_i$ until $R_i^{(k+1)} = R_i^{(k)}$ or $R_i^{(k)} > D_i$ (unschedulable).
+
+\subsection{Subscription Callback Response Time}
+
+\subsubsection{Release Model}
+
+The EventManager dispatches subscription callbacks through the following path:
+\begin{equation}
+    \texttt{rcl\_wait} \;\to\; \texttt{RtsemQueue.push()} \;\to\; \text{RTEMS event} \;\to\; \text{Worker execution}.
+\end{equation}
+The spin thread invokes \texttt{rcl\_wait} to detect subscription readiness.
+Upon detection, the callback is wrapped as a \texttt{std::function<void()>} and pushed into the \texttt{RtsemQueue}.
+An RTEMS event is then sent to the corresponding Worker task, which dequeues and executes the callback.
+
+\subsubsection{Release Jitter}
+
+The subscription callback release jitter is given by:
+\begin{equation}
+    J_i^{\mathrm{sub}} = t_{\mathrm{wait}} + t_{\mathrm{push}} + t_{\mathrm{ctx}},
+\end{equation}
+where $t_{\mathrm{wait}}$ is the delay from subscription readiness detection by \texttt{rcl\_wait}, $t_{\mathrm{push}}$ is the time to acquire the \texttt{RtsemQueue} semaphore and enqueue the callback, and $t_{\mathrm{ctx}}$ is the context-switch time from the spin thread to the Worker task.
+Under RTEMS, both $t_{\mathrm{push}}$ and $t_{\mathrm{ctx}}$ are bounded and deterministic.
+
+\subsubsection{End-to-End Latency}
+
+For an intra-process publish--subscribe chain, the end-to-end latency from the publisher's callback invocation to the subscriber's callback completion is decomposed as:
+\begin{equation}
+    L_{\mathrm{e2e}} = L_{\mathrm{pub}} + L_{\mathrm{intra}} + L_{\mathrm{disp}} + L_{\mathrm{exec}},
+    \label{eq:e2e}
+\end{equation}
+where:
+\begin{itemize}
+    \item $L_{\mathrm{pub}}$ is the publisher callback execution time (i.e., $C_{\mathrm{pub}}$).
+    \item $L_{\mathrm{intra}}$ is the intra-process zero-copy delivery latency, which consists of the \texttt{rcl\_wait} detection delay and the data-copy cost. Under intra-process communication, no serialization or inter-process transport is involved.
+    \item $L_{\mathrm{disp}}$ is the EventManager dispatch latency, bounded by one tick plus one context switch: $L_{\mathrm{disp}} \leqslant 1~\text{tick} + t_{\mathrm{ctx}}$.
+    \item $L_{\mathrm{exec}}$ is the subscriber callback execution time (i.e., $C_{\mathrm{sub}}$).
+\end{itemize}
+
+\subsection{Comparison with Nested Scheduling Analysis}
+
+Under the standard ROS~2 Executor, nested scheduling introduces an Executor-level blocking term $B^{\mathrm{exec}}$ into the response-time analysis~\cite{casini2019rtas,tang2020rtss,blass2021rtss,jiang2022rtss}.
+Specifically, a high-priority callback may be blocked by a lower-priority callback that currently occupies the Executor thread.
+The resulting response-time bound takes the form:
+\begin{equation}
+    R_i^{\mathrm{nested}} = C_i + \sum_{j \in hp(i)} \left\lceil \frac{R_i + J_j}{T_j} \right\rceil \times C_j + B_i + B_i^{\mathrm{exec}},
+    \label{eq:rta-nested}
+\end{equation}
+where $B_i^{\mathrm{exec}}$ represents the worst-case Executor-level blocking.
+This term is difficult to bound tightly: when callbacks within the same \texttt{MutuallyExclusive} callback group share an Executor thread, $B_i^{\mathrm{exec}}$ can be as large as the longest execution time of any lower-priority callback in the group~\cite{casini2019rtas}.
+In the worst case, when the Executor lacks priority distinction among callbacks, $B_i^{\mathrm{exec}}$ is effectively unbounded.
+
+With RTExecutor, nested scheduling is eliminated entirely.
+The Executor-level blocking term vanishes:
+\begin{equation}
+    B_i^{\mathrm{exec}} = 0.
+\end{equation}
+Equation~\eqref{eq:rta-timer} therefore degenerates to the classic FP scheduling response-time analysis, which is both simpler and tighter than the nested analysis of Eq.~\eqref{eq:rta-nested}.
+This constitutes a fundamental analytical advantage of the proposed approach: by collapsing the two-level scheduling hierarchy into a single OS-level scheduler, the worst-case response-time bounds become both easier to compute and more favorable for schedulability.
+
+\subsection{Schedulability Condition}
+
+A callback set $\Gamma$ is deemed schedulable under RTExecutor if and only if every callback meets its deadline:
+\begin{equation}
+    \forall \gamma_i \in \Gamma : \quad R_i \leqslant D_i,
+    \label{eq:sched}
+\end{equation}
+where $R_i$ is computed via Eq.~\eqref{eq:rta-timer}.
+
+When priorities are assigned according to the rate-monotonic policy ($D_i = T_i$), Liu and Layland's utilization test provides a sufficient schedulability condition:
+\begin{equation}
+    U = \sum_{i=1}^{n} \frac{C_i}{T_i} \leqslant n\left(2^{1/n} - 1\right).
+    \label{eq:util}
+\end{equation}
+Note that Eq.~\eqref{eq:util} does not account for release jitter.
+When jitter is non-negligible (e.g., for timer callbacks with $J_i^{\mathrm{timer}} \leqslant 2$~ticks), the exact response-time test of Eq.~\eqref{eq:rta-timer} should be applied instead.
+Nevertheless, the key observation is that this analysis is \emph{identical} to the standard uniprocessor FP scheduling analysis---no Executor-specific terms need to be introduced, which is the direct consequence of eliminating nested scheduling.

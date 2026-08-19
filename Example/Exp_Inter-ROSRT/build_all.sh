@@ -1,0 +1,124 @@
+#!/bin/bash
+#
+# build_all.sh — Compile once, then link all chain lengths for Exp_Inter-ROSRT
+# Uses rclcpp-rtss25 librclcpp.a (with NoExecutor) instead of standard rclcpp
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+RTEMS_PATH="/root/RTEMS/quick-start/rtems/6"
+BSP="arm/realview_pbx_a9_qemu"
+BUILD_DIR="build/arm-rtems6-realview_pbx_a9_qemu"
+
+CC="$RTEMS_PATH/bin/arm-rtems6-g++"
+BSP_LIB="$RTEMS_PATH/arm-rtems6/realview_pbx_a9_qemu/lib"
+
+# rtss25-built librclcpp.a path (contains NoExecutor)
+RTSS_LIB_DIR="../../rclcpp-rtss25/config/config_rclcpp/tmp/build/arm-rtems6-realview_pbx_a9_qemu"
+
+# Step 1: Compile with waf (linking will fail, but we get .o files)
+echo "[1/2] Compiling all targets..."
+python3 waf configure --rtems="$RTEMS_PATH" --rtems-bsp="$BSP" 2>/dev/null
+python3 waf build 2>&1 | grep -v "undefined reference\|cannot find\|ld returned\|Build failed" || true
+
+# Verify object files
+IDX=1
+for N in 2 3 4 5 10 15; do
+    TEST_OBJ="$BUILD_DIR/src/test_main.cpp.${IDX}.o"
+    MAIN_OBJ="$BUILD_DIR/src/exp3inter_rosrt_main.cpp.${IDX}.o"
+    if [ ! -f "$TEST_OBJ" ] || [ ! -f "$MAIN_OBJ" ]; then
+        echo "ERROR: Object files not found for n=$N (idx=$IDX)"
+        exit 1
+    fi
+    IDX=$((IDX + 1))
+done
+
+# Step 2: Link all executables using rtss25 librclcpp.a
+LIBS=(
+    -Wl,--start-group
+    -lrclcpp -lrcl -lstatistics_collector
+    -lstatistics_msgs__rosidl_generator_c
+    -lstatistics_msgs__rosidl_typesupport_c
+    -lstatistics_msgs__rosidl_typesupport_cpp
+    -lstatistics_msgs__rosidl_typesupport_fastrtps_c
+    -lstatistics_msgs__rosidl_typesupport_fastrtps_cpp
+    -lstatistics_msgs__rosidl_typesupport_introspection_c
+    -lstatistics_msgs__rosidl_typesupport_introspection_cpp
+    -lrcl_interfaces__rosidl_generator_c
+    -lrcl_interfaces__rosidl_typesupport_c
+    -lrcl_interfaces__rosidl_typesupport_cpp
+    -lrcl_interfaces__rosidl_typesupport_fastrtps_c
+    -lrcl_interfaces__rosidl_typesupport_fastrtps_cpp
+    -lrcl_interfaces__rosidl_typesupport_introspection_c
+    -lrcl_interfaces__rosidl_typesupport_introspection_cpp
+    -lrmw_fastrtps_cpp -lrmw_fastrtps_shared_cpp -lrmw_fastrtps_dynamic_cpp
+    -lrmw_implementation -lrmw -lament_index_cpp -lclass-loader
+    -lbuiltin_interfaces__rosidl_generator_c
+    -lbuiltin_interfaces__rosidl_typesupport_c
+    -lbuiltin_interfaces__rosidl_typesupport_cpp
+    -lbuiltin_interfaces__rosidl_typesupport_fastrtps_c
+    -lbuiltin_interfaces__rosidl_typesupport_fastrtps_cpp
+    -lbuiltin_interfaces__rosidl_typesupport_introspection_c
+    -lbuiltin_interfaces__rosidl_typesupport_introspection_cpp
+    -lrcl-yaml-param-parser -lrcl_logging_interface -lrcl_logging_noop
+    -lrosgraph_msgs__rosidl_generator_c
+    -lrosgraph_msgs__rosidl_typesupport_c
+    -lrosgraph_msgs__rosidl_typesupport_cpp
+    -lrosgraph_msgs__rosidl_typesupport_fastrtps_c
+    -lrosgraph_msgs__rosidl_typesupport_fastrtps_cpp
+    -lrosgraph_msgs__rosidl_typesupport_introspection_c
+    -lrosgraph_msgs__rosidl_typesupport_introspection_cpp
+    -lrosidl_typesupport_c -lrosidl_typesupport_fastrtps_cpp
+    -lrosidl_typesupport_cpp -lrosidl_typesupport_fastrtps_c
+    -lrosidl_typesupport_introspection_c -lrosidl_typesupport_introspection_cpp
+    -lstd_msgs__rosidl_generator_c
+    -lstd_msgs__rosidl_typesupport_c
+    -lstd_msgs__rosidl_typesupport_cpp
+    -lstd_msgs__rosidl_typesupport_fastrtps_c
+    -lstd_msgs__rosidl_typesupport_fastrtps_cpp
+    -lstd_msgs__rosidl_typesupport_introspection_c
+    -lstd_msgs__rosidl_typesupport_introspection_cpp
+    -lrmw_dds_common -lrmw_dds_common__rosidl_generator_c
+    -lrmw_dds_common__rosidl_typesupport_c
+    -lrmw_dds_common__rosidl_typesupport_cpp
+    -lrmw_dds_common__rosidl_typesupport_fastrtps_c
+    -lrmw_dds_common__rosidl_typesupport_fastrtps_cpp
+    -lrmw_dds_common__rosidl_typesupport_introspection_c
+    -lrmw_dds_common__rosidl_typesupport_introspection_cpp
+    -lrosidl_runtime_c
+    -lfastrtps -lfastcdr -lfoonathan_memory -ltinyxml2
+    -lrcpputils -lyaml -lrcutils
+    -lstdc++ -lrtemscpu -lrtemsbsp -lrtemsdefaultconfig -lm -lgcc -lc -lbsd
+    -Wl,--end-group
+)
+
+echo "[2/2] Linking all executables (using rtss25 librclcpp.a)..."
+IDX=1
+for N in 2 3 4 5 10 15; do
+    TEST_OBJ="$BUILD_DIR/src/test_main.cpp.${IDX}.o"
+    MAIN_OBJ="$BUILD_DIR/src/exp3inter_rosrt_main.cpp.${IDX}.o"
+    OUTPUT="$BUILD_DIR/exp3inter_rosrt_n${N}.exe"
+
+    $CC \
+        -march=armv7-a -mthumb -mfpu=neon -mfloat-abi=hard -mtune=cortex-a9 \
+        -isystem"$BSP_LIB/include" \
+        -B"$BSP_LIB" -qrtems \
+        -Wl,--gc-sections -static \
+        "$TEST_OBJ" "$MAIN_OBJ" \
+        -o "$OUTPUT" \
+        -L"$RTSS_LIB_DIR" \
+        -L"$BSP_LIB" \
+        "${LIBS[@]}"
+
+    if [ $? -eq 0 ]; then
+        echo "  OK: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
+    else
+        echo "  FAILED: $OUTPUT"
+        exit 1
+    fi
+    IDX=$((IDX + 1))
+done
+
+echo "All executables built successfully."

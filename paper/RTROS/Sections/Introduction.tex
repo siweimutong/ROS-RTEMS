@@ -1,0 +1,36 @@
+\section{Introduction}
+
+Component-based middleware built on the publish-subscribe paradigm has become the de facto standard for developing cyber-physical systems (CPS), including autonomous vehicles, industrial robots, and surgical systems.
+The Robot Operating System~2 (ROS~2) is currently the most widely adopted such middleware, providing a rich ecosystem of libraries and tools for perception, planning, and control.
+
+A key requirement for these systems is \emph{real-time determinism}: sensor data must be processed within bounded latency, control commands must be issued at precise intervals, and high-priority callbacks must preempt lower-priority ones.
+Unfortunately, the standard ROS~2 execution model falls short of these requirements.
+The \texttt{rclcpp} Executor implements its own callback scheduling---a FIFO or round-robin dispatch of ready callbacks from an internal wait-set---on top of the operating system's thread scheduler.
+This creates a \emph{nested scheduling} structure~\cite{casini2019rtas}, in which two independent schedulers operate at different abstraction levels without coordinating priority information.
+
+The consequences are well documented: \emph{unbounded priority inversion} occurs when a low-priority callback occupying the Executor thread blocks a high-priority one~\cite{casini2019rtas}; \emph{non-deterministic dispatch order} arises from the wait-set mechanism~\cite{sun2024rtss}; \emph{timing anomalies} appear where adding resources actually increases latency~\cite{voronov2024rtas}; and \emph{response-time analysis} becomes intractable because both scheduling layers must be modeled simultaneously~\cite{tang2020rtss,blass2021rtss}.
+
+Recent work has attempted to mitigate these problems within the Linux ecosystem.
+CallbackIsolatedExecutor~\cite{ishikawa2025rtas} maps each callback to a dedicated \texttt{SCHED\_FIFO} thread.
+EventsExecutor~\cite{teper2024rtss} bridges ROS~2 with classic fixed-priority scheduling.
+PiCAS~\cite{choi2021rtas} implements priority-driven chain-aware scheduling.
+However, all these approaches are fundamentally limited by the Linux kernel: CFS does not provide deterministic guarantees, interrupt latency remains non-deterministic even with PREEMPT\_RT, and the overhead of user--kernel mode switches is significant.
+
+We propose a fundamentally different approach: \emph{eliminate the middleware scheduling layer entirely} by porting ROS~2 to a true real-time operating system and returning all scheduling decisions to the OS kernel.
+Specifically, we make the following contributions:
+
+\begin{enumerate}
+    \item \textbf{Complete porting of ROS~2 to RTEMS~6.1 on ARM.} We ported the full \texttt{rclcpp} stack---including the intra-process zero-copy communication path---to the RTEMS real-time operating system running on the ARM \texttt{realview\_pbx\_a9\_qemu} platform. This is the first full ROS~2 port to an open-source RTOS that supports the complete \texttt{rclcpp} API.
+
+    \item \textbf{RTExecutor: an Executor that eliminates nested scheduling.} We design RTExecutor, which replaces the Executor's internal callback dispatch with direct mapping to RTEMS real-time tasks. Each ROS~2 callback is assigned an independent RTEMS task with a user-specified priority, and all scheduling is performed by the RTEMS fixed-priority preemptive scheduler.
+
+    \item \textbf{TimeManager: hardware-interrupt-driven timer callbacks.} We design TimeManager, which uses hardware tick interrupts and the RTEMS Watchdog red-black tree mechanism to drive periodic timer callbacks, reducing jitter from tens of milliseconds on Linux to $\leqslant 2$~ticks ($2$~ms) on RTEMS.
+
+    \item \textbf{EventManager: event-driven subscription/service callback scheduling.} EventManager transfers subscription, service, and client callback execution from the Executor thread to RTEMS real-time tasks, notified via RTEMS events and protected by priority-inheritance semaphores.
+
+    \item \textbf{Formal response-time analysis.} Since nested scheduling is eliminated, classic fixed-priority preemptive scheduling response-time analysis becomes directly applicable. We derive the schedulability conditions and show that timer release jitter is bounded by $2$~ticks.
+
+    \item \textbf{Experimental evaluation} on the ARM QEMU platform demonstrates: (i) timer callback jitter $\leqslant 2$~ticks; (ii) deterministic priority preemption; (iii) correct concurrent callback execution with priority inheritance; (iv) end-to-end subscription latency consistent with theoretical bounds.
+\end{enumerate}
+
+The remainder of this paper is organized as follows. Section~II analyzes the nested scheduling problem. Section~III describes the ROS~2-to-RTEMS porting. Section~IV presents the RTExecutor design. Section~V provides the response-time analysis. Section~VI evaluates the system. Section~VII discusses related work. Section~VIII concludes.

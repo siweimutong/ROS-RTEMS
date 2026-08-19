@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="GB2312" standalone="no"?>
+<SylixOSSetting>
+    <BaseSetting Profile="standard" ProjectType="SylixOSAppProject" RealEvoVer="6.1.0 Professional" TlsVersion="default"/>
+    <OutputSetting>
+        <OutputPath Name="Output" Path="Release:Debug" TreeNode="Output"/>
+        <OutputPath Name="Debug" Path="Debug" TreeNode="Debug"/>
+        <OutputPath Name="Release" Path="Release" TreeNode="Release"/>
+    </OutputSetting>
+    <BuildSetting CoustomCfgMakefile="false" NeedReBuild="false" NotScanSourceFile="false"/>
+    <DeviceSetting DevName="192.168.7.37" WorkDir="/apps/lifecycle"/>
+    <UploadPath>
+        <PairItem key="$(WORKSPACE_lifecycle)/$(Output)/strip/lifecycle_talker" value="/apps/lifecycle/lifecycle_talker"/>
+        <PairItem key="$(WORKSPACE_lifecycle)/$(Output)/strip/lifecycle_listener" value="/apps/lifecycle/lifecycle_listener"/>
+        <PairItem key="$(WORKSPACE_lifecycle)/$(Output)/strip/lifecycle_service_client" value="/apps/lifecycle/lifecycle_service_client"/>
+    </UploadPath>
+    <ExtDevNames/>
+</SylixOSSetting>

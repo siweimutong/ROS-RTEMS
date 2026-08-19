@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+# A Waf script to build an RTEMS project with static libraries
+
+from __future__ import print_function
+
+rtems_version = "5"
+
+try:
+    import rtems_waf.rtems as rtems
+except ImportError:
+    print('error: no rtems_waf git submodule')
+    import sys
+    sys.exit(1)
+
+def init(ctx):
+    rtems.init(ctx, version=rtems_version, long_commands=True)
+    ctx.load('compiler_cxx')  # 确保加载 C++ 编译器
+
+def bsp_configure(conf, arch_bsp):
+    # 这里可以进行 BSP 相关的配置检查
+    pass
+
+def options(opt):
+    rtems.options(opt)
+
+def configure(conf):
+    rtems.configure(conf, bsp_configure=bsp_configure)
+
+def build(bld):
+    rtems.build(bld)
+
+    # fastrtps_pre 目标（静态库）
+    # 编译和链接静态库
+    bld.stlib(
+        target='fastrtps_pre',
+        source=['init.c', 
+            '../../code/thirdparty/boost/include/stub/rtems_flock_stub.cpp',
+            '../../code/thirdparty/boost/include/stub/rtems_posix_stub.cpp',
+            '../../code/thirdparty/boost/include/stub/rtems_shm_stub.cpp',
+        '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterCompoundCondition.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterExpression.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterExpressionParser.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterFactory.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterField.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterParameter.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterPredicate.cpp', '../../code/src/cpp/fastdds/topic/DDSSQLFilter/DDSFilterValue.cpp', '../../code/src/cpp/fastdds/log/Log.cpp', '../../code/src/cpp/fastdds/log/OStreamConsumer.cpp', '../../code/src/cpp/fastdds/log/StdoutErrConsumer.cpp', '../../code/src/cpp/fastdds/log/StdoutConsumer.cpp', '../../code/src/cpp/fastdds/log/FileConsumer.cpp', '../../code/src/cpp/rtps/common/Time_t.cpp', '../../code/src/cpp/rtps/resources/ResourceEvent.cpp', '../../code/src/cpp/rtps/resources/TimedEvent.cpp', '../../code/src/cpp/rtps/resources/TimedEventImpl.cpp', '../../code/src/cpp/rtps/writer/LivelinessManager.cpp', '../../code/src/cpp/rtps/writer/LocatorSelectorSender.cpp', '../../code/src/cpp/rtps/writer/RTPSWriter.cpp', '../../code/src/cpp/rtps/writer/StatefulWriter.cpp', '../../code/src/cpp/rtps/writer/ReaderProxy.cpp', '../../code/src/cpp/rtps/writer/StatelessWriter.cpp', '../../code/src/cpp/rtps/writer/ReaderLocator.cpp', '../../code/src/cpp/rtps/history/CacheChangePool.cpp', '../../code/src/cpp/rtps/history/History.cpp', '../../code/src/cpp/rtps/history/WriterHistory.cpp', '../../code/src/cpp/rtps/history/ReaderHistory.cpp', '../../code/src/cpp/rtps/history/TopicPayloadPool.cpp', '../../code/src/cpp/rtps/history/TopicPayloadPoolRegistry.cpp', '../../code/src/cpp/rtps/DataSharing/DataSharingPayloadPool.cpp', '../../code/src/cpp/rtps/DataSharing/DataSharingListener.cpp', '../../code/src/cpp/rtps/DataSharing/DataSharingNotification.cpp', '../../code/src/cpp/rtps/reader/WriterProxy.cpp', '../../code/src/cpp/rtps/reader/StatefulReader.cpp', '../../code/src/cpp/rtps/reader/StatelessReader.cpp', '../../code/src/cpp/rtps/reader/RTPSReader.cpp', '../../code/src/cpp/rtps/messages/RTPSMessageCreator.cpp', '../../code/src/cpp/rtps/messages/RTPSMessageGroup.cpp', '../../code/src/cpp/rtps/messages/RTPSGapBuilder.cpp', '../../code/src/cpp/rtps/messages/SendBuffersManager.cpp', '../../code/src/cpp/rtps/messages/MessageReceiver.cpp', '../../code/src/cpp/rtps/network/NetworkFactory.cpp', '../../code/src/cpp/rtps/network/ReceiverResource.cpp', '../../code/src/cpp/rtps/participant/RTPSParticipant.cpp', '../../code/src/cpp/rtps/participant/RTPSParticipantImpl.cpp', '../../code/src/cpp/rtps/RTPSDomain.cpp', '../../code/src/cpp/fastrtps_deprecated/Domain.cpp', '../../code/src/cpp/fastrtps_deprecated/participant/Participant.cpp', '../../code/src/cpp/fastrtps_deprecated/participant/ParticipantImpl.cpp', '../../code/src/cpp/fastrtps_deprecated/publisher/Publisher.cpp', '../../code/src/cpp/fastrtps_deprecated/publisher/PublisherImpl.cpp', '../../code/src/cpp/fastrtps_deprecated/publisher/PublisherHistory.cpp', '../../code/src/cpp/fastrtps_deprecated/subscriber/Subscriber.cpp', '../../code/src/cpp/fastrtps_deprecated/subscriber/SubscriberImpl.cpp', '../../code/src/cpp/fastrtps_deprecated/subscriber/SubscriberHistory.cpp', '../../code/src/cpp/fastdds/publisher/DataWriter.cpp', '../../code/src/cpp/fastdds/publisher/DataWriterImpl.cpp', '../../code/src/cpp/fastdds/topic/ContentFilteredTopic.cpp', '../../code/src/cpp/fastdds/topic/Topic.cpp', '../../code/src/cpp/fastdds/topic/TopicImpl.cpp', '../../code/src/cpp/fastdds/topic/TypeSupport.cpp', '../../code/src/cpp/fastdds/topic/qos/TopicQos.cpp', '../../code/src/cpp/fastdds/publisher/qos/DataWriterQos.cpp', '../../code/src/cpp/fastdds/subscriber/qos/DataReaderQos.cpp', '../../code/src/cpp/fastdds/publisher/PublisherImpl.cpp', '../../code/src/cpp/fastdds/publisher/qos/PublisherQos.cpp', '../../code/src/cpp/fastdds/publisher/Publisher.cpp', '../../code/src/cpp/fastdds/subscriber/SubscriberImpl.cpp', '../../code/src/cpp/fastdds/subscriber/qos/SubscriberQos.cpp', '../../code/src/cpp/fastdds/subscriber/Subscriber.cpp', '../../code/src/cpp/fastdds/subscriber/DataReader.cpp', '../../code/src/cpp/fastdds/subscriber/DataReaderImpl.cpp', '../../code/src/cpp/fastdds/subscriber/history/DataReaderHistory.cpp', '../../code/src/cpp/fastdds/domain/DomainParticipantFactory.cpp', '../../code/src/cpp/fastdds/domain/DomainParticipantImpl.cpp', '../../code/src/cpp/fastdds/domain/DomainParticipant.cpp', '../../code/src/cpp/fastdds/domain/qos/DomainParticipantQos.cpp', '../../code/src/cpp/fastdds/domain/qos/DomainParticipantFactoryQos.cpp', '../../code/src/cpp/fastdds/builtin/typelookup/common/TypeLookupTypes.cpp', '../../code/src/cpp/fastdds/builtin/common/RPCHeadersImpl.cpp', '../../code/src/cpp/fastdds/builtin/typelookup/TypeLookupManager.cpp', '../../code/src/cpp/fastdds/builtin/typelookup/TypeLookupRequestListener.cpp', '../../code/src/cpp/fastdds/builtin/typelookup/TypeLookupReplyListener.cpp', '../../code/src/cpp/rtps/transport/ChannelResource.cpp', '../../code/src/cpp/rtps/transport/UDPChannelResource.cpp', '../../code/src/cpp/rtps/transport/TCPChannelResource.cpp', '../../code/src/cpp/rtps/transport/TCPChannelResourceBasic.cpp', '../../code/src/cpp/rtps/transport/TCPAcceptor.cpp', '../../code/src/cpp/rtps/transport/TCPAcceptorBasic.cpp', '../../code/src/cpp/rtps/transport/UDPv4Transport.cpp', '../../code/src/cpp/rtps/transport/TCPTransportInterface.cpp', '../../code/src/cpp/rtps/transport/UDPTransportInterface.cpp', '../../code/src/cpp/rtps/transport/shared_mem/SharedMemTransportDescriptor.cpp', '../../code/src/cpp/rtps/transport/TCPv4Transport.cpp', '../../code/src/cpp/rtps/transport/UDPv6Transport.cpp', '../../code/src/cpp/rtps/transport/TCPv6Transport.cpp', '../../code/src/cpp/rtps/transport/test_UDPv4Transport.cpp', '../../code/src/cpp/rtps/transport/tcp/TCPControlMessage.cpp', '../../code/src/cpp/rtps/transport/tcp/RTCPMessageManager.cpp', '../../code/src/cpp/rtps/transport/ChainingTransport.cpp', '../../code/src/cpp/dynamic-types/AnnotationDescriptor.cpp', '../../code/src/cpp/dynamic-types/AnnotationParameterValue.cpp', '../../code/src/cpp/dynamic-types/DynamicData.cpp', '../../code/src/cpp/dynamic-types/DynamicDataFactory.cpp', '../../code/src/cpp/dynamic-types/DynamicType.cpp', '../../code/src/cpp/dynamic-types/DynamicPubSubType.cpp', '../../code/src/cpp/dynamic-types/DynamicTypePtr.cpp', '../../code/src/cpp/dynamic-types/DynamicDataPtr.cpp', '../../code/src/cpp/dynamic-types/DynamicTypeBuilder.cpp', '../../code/src/cpp/dynamic-types/DynamicTypeBuilderPtr.cpp', '../../code/src/cpp/dynamic-types/DynamicTypeBuilderFactory.cpp', '../../code/src/cpp/dynamic-types/DynamicTypeMember.cpp', '../../code/src/cpp/dynamic-types/MemberDescriptor.cpp', '../../code/src/cpp/dynamic-types/TypeDescriptor.cpp', '../../code/src/cpp/dynamic-types/TypeIdentifier.cpp', '../../code/src/cpp/dynamic-types/TypeIdentifierTypes.cpp', '../../code/src/cpp/dynamic-types/TypeObject.cpp', '../../code/src/cpp/dynamic-types/TypeObjectHashId.cpp', '../../code/src/cpp/dynamic-types/TypeObjectFactory.cpp', '../../code/src/cpp/dynamic-types/TypeNamesGenerator.cpp', '../../code/src/cpp/dynamic-types/TypesBase.cpp', '../../code/src/cpp/dynamic-types/BuiltinAnnotationsTypeObject.cpp', '../../code/src/cpp/dynamic-types/DynamicDataHelper.cpp', '../../code/src/cpp/utils/string_convert.cpp'],
+        includes=['../../code/thirdparty/boost/include', '../../code/include/', '../../code/src/cpp/', '../../code/build/include/', '../../code/test/mock/rtps/RTPSParticipantImpl/', '../../code/thirdparty/nlohmann-json/', '../../code/thirdparty/taocpp-pegtl/', '../../../Fast-CDR/code/include/', '../../../Fast-CDR/code/build/include/', '../../../memory-main/code/include/', '../../../memory-main/code/build/src/', '../../../memory-main/code/build/src', '../../code/asio/include/', '../../../tinyxml2/code/include/'],
+        defines=[
+            "RTEMS",
+            "TLS_FOUND=0",
+            "ASIO_NO_SSL=1",
+            "ASIO_DISABLE_SSL=1",
+            "IP_MULTICAST_LOOP=34",
+            "IP_ADD_MEMBERSHIP=35",
+            "ESHUTDOWN=108",
+            "IP_MULTICAST_IF=32",
+            "IP_MULTICAST_TTL=33",
+            "ASIO_DISABLE_SIGNAL_SET=1",
+            "PF_UNSPEC=0",
+            "PF_INET6=10",
+            "ASIO_STANDALONE",
+            "ASIO_IPV4_ONLY=1",
+            "ASIO_HAS_NO_EXCEPTIONS=1",
+            "BOOST_HAS_UNISTD_H",
+            # "ASIO_HAS_PTHREADS",
+            # "ASIO_HAS_THREADS",
+            "ASIO_DISABLE_THREADS",
+            "ASIO_DISABLE_POSIX_SIGNAL_BLOCKS=1",
+            "AF_INET6=0",
+            "INET6_ADDRSTRLEN=46",
+            "IPV6_MULTICAST_IF=0",
+            "IPV6_MULTICAST_HOPS=0",
+            "IPV6_MULTICAST_LOOP=0",
+            "IPV6_JOIN_GROUP=0",
+            "IPV6_LEAVE_GROUP=0",
+            "IPV6_UNICAST_HOPS=0",
+            "IPV6_V6ONLY=0",
+            "ASIO_DISABLE_IPV6=1",
+            "ASIO_HAS_IPV6=0",
+            "ASIO_NO_IPV6=1",
+            # "ASIO_OS_DEF_AF_INET6=0",
+            "ASIO_DISABLE_IPV6_ITERATOR=1",
+            "ASIO_IPV6_ADDRESS_DISABLED=1",
+            "ASIO_IPV6_ENDPOINT_DISABLED=1",
+            "ASIO_DETAIL_SOCKADDR_IN6_TYPE=void",
+            "BOOST_INTERPROCESS_DISABLE_POSIX_FILE_LOCKS=1",
+            "BOOST_INTERPROCESS_DISABLE_FILESYSTEM=1",
+            "BOOST_INTERPROCESS_POSIX_API=0",
+            "ASIO_DISABLE_IPV6=1",
+            "ASIO_HAS_IPV6=0",
+            "ASIO_HAS_IP_MULTICAST=1",
+            "IPPROTO_IPV6=41",
+            "IPPROTO_ICMPV6=58",
+            "IP_TTL=2",
+            "IP_DROP_MEMBERSHIP=36"
+        ],
+        cxxflags='-Wno-psabi -fpermissive -fexceptions -frtti -std=c++17 -Wno-register -g -Wno-unknown-pragmas -fPIC',
+        linkflags='-static',
+        lib=['tinyxml2', 'foonathan_memory', 'fastcdr', 'stdc++', 'rtemscpu', 'rtemsbsp', 'rtemsdefaultconfig', 'm', 'gcc', 'c'],
+    )

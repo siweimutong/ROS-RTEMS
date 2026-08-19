@@ -1,0 +1,270 @@
+\section{RTExecutor: Eliminating Nested Scheduling}
+\label{sec:design}
+
+\subsection{Core Principle}
+
+The fundamental design principle of RTExecutor is that \emph{the middleware layer should not make scheduling decisions}; scheduling authority should be entirely exercised by the OS kernel.  In the standard ROS~2 execution model, the Executor maintains its own callback dispatch policy (FIFO or round-robin) inside the middleware, forming a nested scheduling structure with the OS thread scheduler.  RTExecutor eliminates this middleware-level scheduling by mapping every callback directly to an RTEMS real-time task, so that all preemption, priority arbitration, and resource sharing decisions are made by a single scheduler---the RTEMS fixed-priority preemptive kernel.
+
+Table~\ref{tab:comparison} summarizes the key differences between the standard \texttt{rclcpp} Executor and RTExecutor.
+
+\begin{table}[t]
+\centering
+\caption{Comparison of Standard Executor and RTExecutor}
+\label{tab:comparison}
+\begin{tabular}{p{1.3cm}|p{2.5cm}|p{2.5cm}}
+\hline
+\textbf{Aspect} & \textbf{Standard Executor} & \textbf{RTExecutor} \\
+\hline
+\hline
+Callback Readiness Detection & \texttt{rcl\_wait} (middleware) & \texttt{rcl\_wait} (middleware) \\
+\hline
+Callback Execution Scheduling & Executor thread pool (middleware) & RTEMS tasks (OS kernel) \\
+\hline
+Timer Driver & \texttt{rclcpp} software timer & Hardware tick interrupt \\
+\hline
+Priority Management & Callbacks have no priority & Each callback mapped to RTEMS task with independent priority \\
+\hline
+Nested Scheduling & Exists (Executor + OS) & Eliminated (OS only) \\
+\hline
+\end{tabular}
+\end{table}
+
+Note that both the standard Executor and RTExecutor use \texttt{rcl\_wait} for \emph{readiness detection}---the point of divergence is what happens \emph{after} a callback becomes ready.  The standard Executor dispatches it to its own thread pool, whereas RTExecutor delegates execution to an RTEMS task, thereby transferring scheduling authority to the kernel.
+
+\subsection{Architecture Overview}
+
+RTExecutor inherits from \texttt{rclcpp::Executor} and overrides its core execution methods.  As shown in Fig.~\ref{fig:architecture}, RTExecutor decomposes callback management into two sub-managers:
+
+\begin{itemize}
+    \item \textbf{TimeManager} --- manages timer callbacks, driven by hardware tick interrupts rather than software timers.
+    \item \textbf{EventManager} --- manages subscription, service, and client callbacks, dispatching them to RTEMS tasks via an event-driven mechanism.
+\end{itemize}
+
+The main \texttt{spin()} loop proceeds as follows:
+\begin{enumerate}
+    \item Start the TimeManager, which spawns a Reader--Worker task pair for hardware-timer-driven callbacks.
+    \item Start the EventManager, which spawns a configurable number of Worker RTEMS tasks.
+    \item Call \texttt{get\_next\_executable()} to detect a ready callback via \texttt{rcl\_wait}.
+    \item Call \texttt{dispatch\_any\_executable()} to wrap the callback and push it to the appropriate manager.
+\end{enumerate}
+
+This architecture ensures that the RTExecutor spin thread performs only \emph{detection and dispatch}---it never executes callback logic itself.  All callback execution occurs within RTEMS tasks under the control of the kernel scheduler.
+
+\begin{figure}[t]
+\centering
+\framebox{\parbox{0.9\columnwidth}{\centering\vspace{1em}
+\textbf{RTExecutor} \texttt{(rclcpp::Executor)}\\[0.5em]
+\begin{tabular}{c}
+TimeManager \\ \hline
+Reader Task (prio 80) \\
+Worker Task (prio 70)
+\end{tabular}
+\quad
+\begin{tabular}{c}
+EventManager \\ \hline
+Worker Task(s) (prio 60) \\
+RtsemQueue
+\end{tabular}\\[0.8em]
+\texttt{spin()} $\to$ \texttt{get\_next\_executable()} $\to$ \texttt{dispatch\_any\_executable()}\\[0.3em]
+Spin Thread (prio 50)
+\vspace{1em}}}
+\caption{RTExecutor architecture overview.  TimeManager handles timer callbacks via hardware interrupts; EventManager handles subscription/service/client callbacks via RTEMS events.  The spin thread performs only readiness detection and dispatch.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{TimeManager: Hardware Interrupt-Driven Timer Callbacks}
+
+\subsubsection{Design Basis}
+
+The TimeManager is based on the RTEMS Timer Server mechanism, whose operation can be traced from hardware interrupt to callback execution as follows:
+
+\begin{equation}
+\text{Hardware Tick Interrupt} \to \text{Clock Tick ISR} \to \text{Watchdog R-B Tree} \to \text{Timer Server Task} \to \text{Callback}
+\end{equation}
+
+On each hardware tick, the Clock Tick ISR traverses the Watchdog red-black tree to identify expired timers.  Expired entries are posted to the Timer Server task, which executes the registered callback in its own task context.  Because the Timer Server runs at the highest application priority (priority~1), it preempts all other tasks immediately upon notification, ensuring minimal dispatch latency.
+
+\subsubsection{Custom Timer Driver}
+
+To expose this mechanism to ROS~2, we implement a custom RTEMS device driver, \texttt{/dev/rtss\_timer}, which provides:
+
+\begin{itemize}
+    \item Up to \textbf{8 timer channels}, each independently configurable with its own period.
+    \item Three \textbf{trigger modes} selectable per channel:
+    \begin{itemize}
+        \item \texttt{EVENT} --- fires via \texttt{rtems\_event\_send} to the Reader task;
+        \item \texttt{BINARY\_SEMAPHORE} --- releases an RTEMS binary semaphore;
+        \item \texttt{MESSAGE\_QUEUE} --- enqueues a message to an RTEMS message queue.
+    \end{itemize}
+\end{itemize}
+
+The driver maintains a lock-free ring buffer of 64 entries for pending timer events, enabling $O(1)$ insertion by the ISR and $O(1)$ consumption by the Reader task without lock contention.
+
+\subsubsection{Reader--Worker Dual-Task Architecture}
+
+The TimeManager employs a dual-task architecture to separate hardware event reading from callback execution:
+
+\begin{itemize}
+    \item \textbf{Reader task} (priority~80): blocks on \texttt{rtems\_event\_receive} waiting for hardware tick events from the timer driver.  Upon receiving an event, it identifies which timer channel fired and invokes the corresponding registered callback.
+    \item \textbf{Worker task} (priority~70): executes the registered timer callbacks.  Separating the Reader from the Worker ensures that reading events from the driver is not delayed by a long-running callback, and vice versa.
+\end{itemize}
+
+\subsubsection{Registration Interface}
+
+Timer callbacks are registered via:
+\begin{center}
+\texttt{register\_rt\_timer(callback, period\_ms)}
+\end{center}
+where \texttt{callback} is a \texttt{std::function<void()>} and \texttt{period\_ms} specifies the desired period in milliseconds.  Internally, this converts the period to ticks using the system's configured \texttt{CONFIGURE\_MICROSECONDS\_PER\_TICK} and programs the corresponding timer channel in the driver.
+
+\subsubsection{Jitter Measurement}
+
+The theoretical fire time for the $k$-th invocation of a timer with period $T$ (in ticks) and start tick $t_0$ is:
+\begin{equation}
+    t_{\text{theory}}(k) = t_0 + k \cdot T
+\end{equation}
+The measured jitter is:
+\begin{equation}
+    J(k) = t_{\text{actual}}(k) - t_{\text{theory}}(k)
+\end{equation}
+
+In our experiments (Section~VI), $J(k) \in [0,\, 2]$~ticks, i.e., $\leqslant 2$~ms with a 1~ms tick resolution.
+
+\subsubsection{Comparison with Standard \texttt{rclcpp} Timers}
+
+The standard \texttt{rclcpp} timer is implemented on top of \texttt{rcl\_timer}, a software timer that relies on \texttt{rcl\_wait} to detect expiration.  On Linux, this software timer exhibits typical jitter of $10$--$50$~ms due to nondeterministic scheduling, tick resolution, and CFS preemption behavior.  In contrast, the TimeManager's hardware-interrupt-driven approach achieves jitter $\leqslant 2$~ms, a reduction of more than one order of magnitude.
+
+\subsection{EventManager: Event-Driven Subscription Callback Scheduling}
+
+\subsubsection{Overview}
+
+The EventManager transfers the execution of subscription, service, and client callbacks from the Executor thread to RTEMS real-time tasks.  This is the key mechanism that eliminates middleware-level scheduling for event-driven callbacks.
+
+\subsubsection{Workflow}
+
+The dispatch workflow for a subscription callback proceeds as follows:
+
+\begin{enumerate}
+    \item The spin thread calls \texttt{rcl\_wait}, which blocks until at least one callback is ready.
+    \item Upon detecting a ready callback, the spin thread wraps it as a \texttt{std::function<void()>} and pushes it into the \texttt{RtsemQueue}.
+    \item The spin thread notifies an idle Worker task via \texttt{rtems\_event\_send(RTEMS\_EVENT\_1)}.
+    \item The RTEMS Worker task, which was blocked on \texttt{rtems\_event\_receive}, wakes up, retrieves the callback from the queue via \texttt{try\_pop}, and executes it.
+\end{enumerate}
+
+By transferring callback execution from the spin thread (which has no application-level priority semantics) to a dedicated RTEMS task with a user-specified priority, the EventManager ensures that all scheduling decisions are made by the RTEMS kernel.
+
+\subsubsection{RtsemQueue Design}
+
+The \texttt{RtsemQueue} is a task-safe queue protected by an RTEMS priority-inheritance binary semaphore.  Its two core operations are:
+
+\begin{itemize}
+    \item \textbf{\texttt{push}}: acquires the semaphore in blocking mode (\texttt{RTEMS\_WAIT}), enqueues the callback, and releases the semaphore.  This guarantees that the push operation eventually succeeds even under contention.
+    \item \textbf{\texttt{try\_pop}}: attempts to acquire the semaphore in non-blocking mode (\texttt{RTEMS\_NO\_WAIT}).  If the semaphore is held by another task, \texttt{try\_pop} returns immediately without blocking, preventing the Worker task from stalling on an empty or contended queue.
+\end{itemize}
+
+The priority-inheritance attribute (\texttt{RTEMS\_INHERIT\_PRIORITY}) on the semaphore ensures that if a high-priority Worker is blocked waiting for the semaphore held by a lower-priority task, the holder's priority is temporarily elevated, bounding priority inversion to at most one critical section duration.
+
+\subsubsection{Configurable Worker Tasks}
+
+The EventManager supports a configurable number of Worker tasks, each created with an independently specified priority via \texttt{rtems\_task\_create}.  This allows the application developer to map different callbacks to Workers of different priorities, enabling fine-grained priority-based preemption among callbacks---a capability that is impossible under the standard Executor's uniform thread pool.
+
+\subsection{Dispatch Mechanism: \texttt{dispatch\_any\_executable}}
+
+After \texttt{get\_next\_executable()} detects a ready callback, \texttt{dispatch\_any\_executable()} wraps it as a lambda and pushes it to the EventManager.  The wrapping logic depends on the callback type:
+
+\begin{itemize}
+    \item \textbf{Timer callback}: wrapped as
+    \begin{center}
+    \texttt{[\,timer\,]() \{ timer->execute\_callback(); \}}
+    \end{center}
+    \item \textbf{Subscription callback}: wrapped as
+    \begin{center}
+    \texttt{[\,subscription\,]() \{ subscription->take(); handle(); \}}
+    \end{center}
+\end{itemize}
+
+In both cases, the lambda captures a \texttt{shared\_ptr} to the callback object by value.  This is critical: because the callback is executed asynchronously by an RTEMS task rather than by the spin thread, the \texttt{shared\_ptr} capture ensures that the callback object remains alive throughout the RTEMS task's execution, preventing use-after-free errors even if the spin thread proceeds to destroy or replace the object.
+
+For callbacks belonging to a \texttt{MutuallyExclusive} callback group, RTExecutor resets the group's \texttt{can\_be\_taken\_from} flag only \emph{after} the RTEMS task completes execution.  This preserves the mutual exclusion semantics of the callback group across the asynchronous dispatch boundary.
+
+\subsection{Priority Mapping Strategy}
+
+RTExecutor assigns distinct RTEMS priorities to each system task, creating a clear priority hierarchy that reflects the timing requirements of each component.  Table~\ref{tab:priority} presents the default priority mapping.
+
+\begin{table}[t]
+\centering
+\caption{Default Priority Mapping in RTExecutor}
+\label{tab:priority}
+\begin{tabular}{l|c|l}
+\hline
+\textbf{RTEMS Task} & \textbf{Priority} & \textbf{Role} \\
+\hline
+\hline
+Timer Server & 1 & Hardware interrupt callback dispatch \\
+\hline
+TimeManager Reader & 80 & Read hardware tick events \\
+\hline
+TimeManager Worker & 70 & Execute timer callbacks \\
+\hline
+EventManager Worker & 60 & Execute subscription/service callbacks \\
+\hline
+RTExecutor spin thread & 50 & Callback readiness detection and dispatch \\
+\hline
+Non-real-time tasks & 200 & Logging and debugging \\
+\hline
+\end{tabular}
+\end{table}
+
+In RTEMS, lower numeric values denote higher scheduling priority.  The Timer Server at priority~1 thus preempts all other application tasks, ensuring that timer expirations are processed with minimal latency.  The TimeManager Reader (priority~80) is given a higher priority than the Worker (priority~70) so that reading events from the hardware driver is never delayed by a running callback.
+
+\subsubsection{Per-Callback Priority Assignment}
+
+Beyond the default mapping, each individual callback can be assigned to an independent-priority RTEMS task.  This is achieved by extending the EventManager's \texttt{num\_workers} and configuring each Worker with a user-specified priority during registration.  Consequently, a high-priority control callback can preempt a lower-priority logging callback even though both are subscription callbacks---a distinction that the standard Executor cannot make.
+
+\subsubsection{Priority Inheritance Support}
+
+RTExecutor leverages the RTEMS semaphore's \texttt{RTEMS\_INHERIT\_PRIORITY} attribute to implement priority inheritance.  When a high-priority Worker is blocked on the \texttt{RtsemQueue} semaphore held by a lower-priority Worker, the lower-priority task's priority is temporarily elevated to that of the blocked task.  This bounds the worst-case blocking time $B_i$ for any task $\tau_i$ to the duration of at most one critical section of any lower-priority task that shares a protected resource.
+
+\subsection{Implementation Details}
+
+The RTExecutor implementation spans several source files, each with a clearly defined responsibility.
+
+\subsubsection{RTExecutor and EventManager}
+
+\texttt{rt\_executor.hpp} (located in \texttt{rclcpp/include/rclcpp/executors/}) declares the \texttt{RTExecutor} class and the \texttt{EventManager} class.  \texttt{rt\_executor.cpp} (in \texttt{rclcpp/src/rclcpp/executors/}) provides the complete implementation, including the \texttt{TimeManagerImpl} class that encapsulates all TimeManager logic.
+
+\subsubsection{Hardware Timer Driver}
+
+\texttt{rtss\_timer\_driver.c} (in \texttt{intra\_process\_demo/driver/}) implements the custom RTEMS device driver.  The driver uses a lock-free ring buffer of 64 entries for ISR-to-task communication, avoiding lock contention between the interrupt context and task context.
+
+\subsubsection{RtsemQueue}
+
+The \texttt{RtsemQueue} is a task-safe queue built on top of the RTEMS priority-inheritance binary semaphore.  Its \texttt{push} and \texttt{try\_pop} operations provide the synchronization interface between the spin thread (producer) and the Worker tasks (consumers).
+
+\subsubsection{EventManager Worker Task Loop}
+
+Each EventManager Worker task executes the following loop:
+\begin{enumerate}
+    \item Block on \texttt{rtems\_event\_receive(RTEMS\_EVENT\_1, RTEMS\_WAIT, ...)}.
+    \item Upon receiving the event, call \texttt{RtsemQueue::try\_pop()} to retrieve a callback.
+    \item If a callback is obtained, execute it.
+    \item Return to step~1.
+\end{enumerate}
+This event-driven design ensures that Worker tasks consume no CPU time while idle, and wake up with minimal latency when a callback is dispatched.
+
+\subsubsection{TimeManagerImpl Reader--Worker Architecture}
+
+The \texttt{TimeManagerImpl} class internally creates two RTEMS tasks:
+\begin{itemize}
+    \item The \textbf{Reader task} blocks on a timer driver event, reads the fired channel information, and signals the Worker task.
+    \item The \textbf{Worker task} executes the registered timer callback corresponding to the fired channel.
+\end{itemize}
+The separation ensures that ISR event processing is never delayed by a long-running callback.
+
+\subsubsection{Lifecycle Management in \texttt{dispatch\_any\_executable}}
+
+The \texttt{shared\_ptr} capture in the dispatch lambda is the cornerstone of safe asynchronous callback execution.  When \texttt{dispatch\_any\_executable()} pushes a lambda into the \texttt{RtsemQueue}, the captured \texttt{shared\_ptr} increments the callback object's reference count.  The count is decremented only when the RTEMS Worker task finishes executing the lambda and the lambda object is destroyed.  This guarantees that the callback object's lifetime extends across the full duration of its execution in the RTEMS task context, even if the spin thread has already moved on to process subsequent callbacks.
+
+\subsubsection{Intra-Process Callback Execution Flow}
+
+When intra-process (zero-copy) communication is enabled, the publisher's callback writes data to shared memory, and the subscription callback reads it from the same memory region without serialization.  In RTExecutor, both the publisher and subscription callbacks execute in their respective RTEMS tasks.  The EventManager dispatches the subscription callback to a Worker task upon detecting readiness via \texttt{rcl\_wait}.  The zero-copy data path and the RTEMS task-based execution are orthogonal and compose seamlessly: the shared memory is accessed under the protection of the \texttt{RtsemQueue} semaphore with priority inheritance, ensuring that data races are prevented and priority inversion is bounded.

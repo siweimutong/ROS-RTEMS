@@ -1,0 +1,166 @@
+from __future__ import print_function
+rtems_version = "6"
+try:
+    import rtems_waf.rtems as rtems
+except ImportError:
+    print('error: no rtems_waf git submodule')
+    import sys; sys.exit(1)
+
+def init(ctx):
+    rtems.init(ctx, version=rtems_version, long_commands=True)
+    ctx.load("compiler_cxx")
+
+def bsp_configure(conf, arch_bsp):
+    pass
+
+def options(opt):
+    rtems.options(opt)
+
+def configure(conf):
+    rtems.configure(conf, bsp_configure=bsp_configure)
+
+def build(bld):
+    rtems.build(bld)
+
+    common_includes = [
+        ".",
+        "include",
+        "../../rclcpp/code/src/rclcpp-16.0.8/rclcpp/include",
+        "../../rcl/code/src/rcl-5.3.7/rcl/include",
+        "../../rcutils/code/src/rcutils-5.1.5/include",
+        "../../rmw/code/src/rmw-6.1.1/rmw/include",
+        "../../rosidl/code/src/rosidl/rosidl_runtime_c/include",
+        "../../rosidl/code/src/rosidl/rosidl_typesupport_interface/include",
+        "../../rcpputils/code/src/rcpputils-2.4.2/include",
+        "../../builtin_interfaces/code/src/builtin_interfaces/rosidl_generator_cpp",
+        "../../rosidl/code/src/rosidl/rosidl_runtime_cpp/include",
+        "../../rcl_interfaces/code/src/rcl_interfaces/rosidl_generator_cpp",
+        "../../statistics_msgs/code/src/statistics_msgs/rosidl_generator_cpp",
+        "../../statistics_collector/code/src/include",
+        "../../rcl/code/src/rcl-5.3.7/rcl_yaml_param_parser/include",
+        "../../std_msgs/code/src/std_msgs/rosidl_generator_cpp",
+    ]
+
+    # Same lib list as the working intra_process_demo
+    common_libs = [
+        "rclcpp",
+        "rcl",
+        "statistics_collector",
+
+        "statistics_msgs__rosidl_generator_c",
+        "statistics_msgs__rosidl_typesupport_c",
+        "statistics_msgs__rosidl_typesupport_cpp",
+        "statistics_msgs__rosidl_typesupport_fastrtps_c",
+        "statistics_msgs__rosidl_typesupport_fastrtps_cpp",
+        "statistics_msgs__rosidl_typesupport_introspection_c",
+        "statistics_msgs__rosidl_typesupport_introspection_cpp",
+
+        "rcl_interfaces__rosidl_generator_c",
+        "rcl_interfaces__rosidl_typesupport_c",
+        "rcl_interfaces__rosidl_typesupport_cpp",
+        "rcl_interfaces__rosidl_typesupport_fastrtps_c",
+        "rcl_interfaces__rosidl_typesupport_fastrtps_cpp",
+        "rcl_interfaces__rosidl_typesupport_introspection_c",
+        "rcl_interfaces__rosidl_typesupport_introspection_cpp",
+
+        "rmw_fastrtps_cpp",
+        "rmw_fastrtps_shared_cpp",
+        "rmw_fastrtps_dynamic_cpp",
+        "rmw_implementation",
+        "rmw",
+        "ament_index_cpp",
+        "class-loader",
+
+        "example_interfaces__rosidl_generator_c",
+        "example_interfaces__rosidl_typesupport_c",
+        "example_interfaces__rosidl_typesupport_cpp",
+        "example_interfaces__rosidl_typesupport_fastrtps_c",
+        "example_interfaces__rosidl_typesupport_fastrtps_cpp",
+        "example_interfaces__rosidl_typesupport_introspection_c",
+        "example_interfaces__rosidl_typesupport_introspection_cpp",
+
+        "action_msgs__rosidl_generator_c",
+        "action_msgs__rosidl_typesupport_c",
+        "action_msgs__rosidl_typesupport_cpp",
+        "action_msgs__rosidl_typesupport_fastrtps_c",
+        "action_msgs__rosidl_typesupport_fastrtps_cpp",
+        "action_msgs__rosidl_typesupport_introspection_c",
+        "action_msgs__rosidl_typesupport_introspection_cpp",
+
+        "rcl-yaml-param-parser",
+        "rcl_logging_noop",
+
+        "rosgraph_msgs__rosidl_generator_c",
+        "rosgraph_msgs__rosidl_typesupport_c",
+        "rosgraph_msgs__rosidl_typesupport_cpp",
+        "rosgraph_msgs__rosidl_typesupport_fastrtps_c",
+        "rosgraph_msgs__rosidl_typesupport_fastrtps_cpp",
+        "rosgraph_msgs__rosidl_typesupport_introspection_c",
+        "rosgraph_msgs__rosidl_typesupport_introspection_cpp",
+
+        "rosidl_typesupport_c",
+        "rosidl_typesupport_fastrtps_cpp",
+        "rosidl_typesupport_cpp",
+        "rosidl_typesupport_fastrtps_c",
+        "rosidl_typesupport_introspection_c",
+        "rosidl_typesupport_introspection_cpp",
+
+        "std_msgs__rosidl_generator_c",
+        "std_msgs__rosidl_typesupport_c",
+        "std_msgs__rosidl_typesupport_cpp",
+        "std_msgs__rosidl_typesupport_fastrtps_c",
+        "std_msgs__rosidl_typesupport_fastrtps_cpp",
+        "std_msgs__rosidl_typesupport_introspection_c",
+        "std_msgs__rosidl_typesupport_introspection_cpp",
+
+        "rmw_dds_common",
+        "rmw_dds_common__rosidl_generator_c",
+        "rmw_dds_common__rosidl_typesupport_c",
+        "rmw_dds_common__rosidl_typesupport_cpp",
+        "rmw_dds_common__rosidl_typesupport_fastrtps_c",
+        "rmw_dds_common__rosidl_typesupport_fastrtps_cpp",
+        "rmw_dds_common__rosidl_typesupport_introspection_c",
+        "rmw_dds_common__rosidl_typesupport_introspection_cpp",
+
+        "builtin_interfaces__rosidl_generator_c",
+        "builtin_interfaces__rosidl_typesupport_c",
+        "builtin_interfaces__rosidl_typesupport_cpp",
+        "builtin_interfaces__rosidl_typesupport_fastrtps_c",
+        "builtin_interfaces__rosidl_typesupport_fastrtps_cpp",
+        "builtin_interfaces__rosidl_typesupport_introspection_c",
+        "builtin_interfaces__rosidl_typesupport_introspection_cpp",
+
+        "rosidl_runtime_c",
+
+        "rcl_interfaces__rosidl_typesupport_introspection_cpp",
+        "rcl_interfaces__rosidl_typesupport_introspection_c",
+        "rcl_interfaces__rosidl_typesupport_fastrtps_cpp",
+        "rcl_interfaces__rosidl_typesupport_fastrtps_c",
+        "rcl_interfaces__rosidl_typesupport_cpp",
+        "rcl_interfaces__rosidl_typesupport_c",
+        "rcl_interfaces__rosidl_generator_c",
+
+        "fastrtps",
+        "fastcdr",
+        "foonathan_memory",
+        "tinyxml2",
+        "rcpputils",
+        "yaml",
+        "rcutils",
+
+        "stdc++", "rtemscpu", "rtemsbsp", "rtemsdefaultconfig", "m", "gcc", "c", "bsd",
+    ]
+
+    for n in [2, 3, 4, 5, 10, 15]:
+        bld.program(
+            target="exp3inter_mt_n%d.exe" % n,
+            source=[
+                "src/test_main.cpp",
+                "src/exp3inter_mt_main.cpp",
+            ],
+            includes=common_includes,
+            cflags="-DRTEMS -DCHAIN_LENGTH=%d" % n,
+            cxxflags="-DRTEMS -DCHAIN_LENGTH=%d -Wno-psabi -fexceptions -fPIC" % n,
+            linkflags="-static -Wl,--start-group -Wl,--end-group",
+            lib=common_libs,
+        )

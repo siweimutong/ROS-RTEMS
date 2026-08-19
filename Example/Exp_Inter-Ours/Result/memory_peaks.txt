@@ -1,0 +1,4 @@
+exp3inter_ours_n2  vmhwm_kb=176396  vmpeak_kb=722268
+exp3inter_ours_n3  vmhwm_kb=176544  vmpeak_kb=722268
+exp3inter_ours_n4  vmhwm_kb=175768  vmpeak_kb=722268
+exp3inter_ours_n5  vmhwm_kb=176240  vmpeak_kb=722268

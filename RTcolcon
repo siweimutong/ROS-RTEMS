@@ -1,0 +1,313 @@
+#!/bin/bash
+set -euo pipefail
+
+# ===================== Configuration =====================
+# Default compile threads per component (overridable via -t)
+DEFAULT_COMPILE_THREADS=8
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+PURPLE='\033[0;35m'
+NC='\033[0m'
+# ===================== Help =====================
+show_help() {
+    cat << EOF
+ROS2-RTEMS Build Tool (RTcolcon)
+Usage: $0 [options]
+
+Options:
+  -h, --help                 Show this help
+  -t, --threads NUM          Compile threads per component (default: $DEFAULT_COMPILE_THREADS)
+      --force                Force rebuild (clear history markers, rebuild all)
+      --no-force             Incremental build (only build incomplete/failed components;
+                               skip waf/rtems_waf download if already present)
+      --select-packages PKG,...  Build only specified packages (comma-separated, auto-resolve deps)
+      --skip-packages PKG,...    Skip specified packages (comma-separated)
+
+Examples:
+  $0 --force                                                    # Build everything
+  $0 --no-force                                                 # Incremental build all
+  $0 --select-packages rclcpp,std_msgs --force                  # Build rclcpp + std_msgs with deps
+  $0 --skip-packages DDS,yaml --no-force                        # Skip DDS and yaml
+  $0 --select-packages rclcpp --skip-packages statistics_collector --force
+  $0 -t 16 --no-force
+EOF
+    exit 0
+}
+
+root_path=$(pwd)
+build_modle=""
+
+# Core parameters
+COMPILE_THREADS=$DEFAULT_COMPILE_THREADS
+SELECT_PACKAGES=""
+SKIP_PACKAGES=""
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            ;;
+        -t|--threads)
+            if [[ $2 =~ ^[1-9]+$ ]]; then
+                COMPILE_THREADS=$2
+                shift 2
+            else
+                echo -e "${RED}Error: -t/--threads requires a positive integer (e.g. -t 8)${NC}" >&2
+                exit 1
+            fi
+            ;;
+        --select-packages)
+            if [[ -n "${2:-}" && ! "$2" =~ ^- ]]; then
+                SELECT_PACKAGES="${2//,/ }"
+                shift 2
+            else
+                echo -e "${RED}Error: --select-packages requires package names (comma-separated)${NC}" >&2
+                exit 1
+            fi
+            ;;
+        --skip-packages)
+            if [[ -n "${2:-}" && ! "$2" =~ ^- ]]; then
+                SKIP_PACKAGES="${2//,/ }"
+                shift 2
+            else
+                echo -e "${RED}Error: --skip-packages requires package names (comma-separated)${NC}" >&2
+                exit 1
+            fi
+            ;;
+        --force|force)
+            build_modle="force"
+            shift
+            ;;
+        --no-force|no-force)
+            build_modle="no-force"
+            shift
+            ;;
+        *)
+            # Treat remaining args as component root directory
+            if [[ -d "$1" ]]; then
+                ROOT_PATH=$(realpath "$1")
+                shift
+            else
+                echo -e "${RED}Error: invalid argument '$1', or directory not found${NC}" >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+# Validate build mode
+if [[ -z "$build_modle" ]]; then
+    echo -e "${RED}Error: build mode required (--force / --no-force)${NC}" >&2
+    show_help
+fi
+
+# ===================== Init =====================
+start_total_time=$(date +%s)
+FAILED_COUNT=0
+
+# ===================== Component definitions =====================
+COMPONENTS=(
+    "DDS" "yaml" "spdlog" "rcutils" "ament_index_cpp"
+    "rcpputils" "class_loader" "rosidl" "logging"
+    "rmw" "rmw_dds_common" "rmw_fastrtps" "rmw_implementation" "builtin_interfaces"
+    "rcl_interfaces" "composition_interfaces" "unique_identifier_msgs" "action_msgs"
+    "example_interfaces" "lifecycle_msgs" "rosgraph_msgs" "statistics_msgs"
+    "std_msgs" "rcl" "statistics_collector" "rclcpp" "rclcpp-picas"
+)
+
+declare -A DEPENDENCIES
+DEPENDENCIES["DDS"]=""
+DEPENDENCIES["yaml"]=""
+DEPENDENCIES["spdlog"]=""
+DEPENDENCIES["rcutils"]=""
+DEPENDENCIES["ament_index_cpp"]=""
+DEPENDENCIES["rcpputils"]="rcutils"
+DEPENDENCIES["logging"]="rcutils rcpputils spdlog"
+DEPENDENCIES["class_loader"]="rcutils rcpputils"
+DEPENDENCIES["rosidl"]="rcutils rcpputils"
+DEPENDENCIES["rmw"]="rcutils rcpputils rosidl"
+DEPENDENCIES["rmw_dds_common"]="rcutils rcpputils rosidl rmw"
+DEPENDENCIES["rmw_fastrtps"]="DDS rcutils rcpputils rmw rosidl rmw_dds_common"
+DEPENDENCIES["rmw_implementation"]="rcutils rcpputils rmw ament_index_cpp"
+DEPENDENCIES["builtin_interfaces"]="rcutils DDS rosidl"
+DEPENDENCIES["rcl_interfaces"]="DDS rcutils rmw rosidl builtin_interfaces"
+DEPENDENCIES["composition_interfaces"]="rcl_interfaces rcutils rosidl DDS rmw"
+DEPENDENCIES["unique_identifier_msgs"]="rosidl rcutils DDS"
+DEPENDENCIES["action_msgs"]="rosidl unique_identifier_msgs builtin_interfaces rcutils DDS rmw"
+DEPENDENCIES["example_interfaces"]="rosidl rcutils unique_identifier_msgs builtin_interfaces action_msgs rmw DDS"
+DEPENDENCIES["lifecycle_msgs"]="rosidl rcutils DDS rmw"
+DEPENDENCIES["rosgraph_msgs"]="rosidl rcutils builtin_interfaces DDS"
+DEPENDENCIES["rcl"]="rmw rcutils rosidl rmw_implementation rcl_interfaces logging"
+DEPENDENCIES["statistics_msgs"]="rosidl rcutils builtin_interfaces DDS"
+DEPENDENCIES["statistics_collector"]="rcpputils rosidl builtin_interfaces rcl rmw statistics_msgs"
+DEPENDENCIES["std_msgs"]="rosidl rcutils DDS builtin_interfaces"
+DEPENDENCIES["rclcpp"]="rmw rcpputils rcutils rcl builtin_interfaces rcl_interfaces rosgraph_msgs statistics_msgs statistics_collector ament_index_cpp rosidl"
+DEPENDENCIES["rclcpp-picas"]="rmw rcpputils rcutils rcl builtin_interfaces rcl_interfaces rosgraph_msgs statistics_msgs statistics_collector ament_index_cpp rosidl"
+
+# ===================== Package filtering =====================
+
+# --select-packages: add specified packages and their transitive deps to the build list
+# Predefined packages: resolve dependencies recursively
+# Unknown packages: build as standalone projects (directory must exist with run.sh/CMakeLists.txt)
+if [[ -n "$SELECT_PACKAGES" ]]; then
+    # Recursively collect dependencies
+    declare -A NEEDED
+    declare -a EXTRA_PACKAGES=()
+    resolve_deps() {
+        local pkg=$1
+        [[ "${NEEDED[$pkg]:-0}" -eq 1 ]] && return
+        NEEDED[$pkg]=1
+        for dep in ${DEPENDENCIES[$pkg]}; do
+            resolve_deps "$dep"
+        done
+    }
+    for p in $SELECT_PACKAGES; do
+        if [[ -z "${DEPENDENCIES[$p]:-}" ]]; then
+            # Not in predefined list — treat as standalone project
+            if [[ -d "$root_path/$p" ]]; then
+                echo -e "${YELLOW}[info] '$p' is not a predefined component; building as standalone project${NC}"
+                NEEDED[$p]=1
+                EXTRA_PACKAGES+=("$p")
+            else
+                echo -e "${RED}Error: unknown package '$p', and directory '$root_path/$p' not found${NC}" >&2
+                echo "Predefined packages: ${COMPONENTS[*]}" >&2
+                exit 1
+            fi
+        else
+            resolve_deps "$p"
+        fi
+    done
+    # Keep only NEEDED packages, preserving predefined order
+    FILTERED=()
+    for comp in "${COMPONENTS[@]}"; do
+        if [[ "${NEEDED[$comp]:-0}" -eq 1 ]]; then
+            FILTERED+=("$comp")
+        fi
+    done
+    COMPONENTS=("${FILTERED[@]}")
+    # Append standalone projects at the end (after dependency libs)
+    for p in "${EXTRA_PACKAGES[@]}"; do
+        COMPONENTS+=("$p")
+    done
+    echo -e "${YELLOW}[filter] --select-packages: building ${#COMPONENTS[@]} package(s) (including deps)${NC}"
+fi
+
+# --skip: remove specified packages from the build list
+if [[ -n "$SKIP_PACKAGES" ]]; then
+    declare -A SKIP_SET
+    for s in $SKIP_PACKAGES; do
+        SKIP_SET[$s]=1
+    done
+    FILTERED=()
+    for comp in "${COMPONENTS[@]}"; do
+        if [[ "${SKIP_SET[$comp]:-0}" -eq 0 ]]; then
+            FILTERED+=("$comp")
+        fi
+    done
+    SKIPPED=$(( ${#COMPONENTS[@]} - ${#FILTERED[@]} ))
+    COMPONENTS=("${FILTERED[@]}")
+    echo -e "${YELLOW}[filter] --skip: skipping ${SKIPPED} package(s), ${#COMPONENTS[@]} remaining${NC}"
+fi
+
+echo -e "${BLUE}[info] Target packages (${#COMPONENTS[@]}): ${COMPONENTS[*]}${NC}"
+echo ""
+
+# ===================== Core utilities =====================
+is_compiled() {
+    local component=$1
+    [[ -f "./build/.compiled_${component}" ]] && return 0 || return 1
+}
+
+mark_compiled() {
+    local component=$1
+    mkdir -p ./build
+    touch "./build/.compiled_${component}"
+}
+
+compile_one() {
+    local component=$1
+    local dep_failed=0
+
+    # Build dependencies first (recursive)
+    for dep in ${DEPENDENCIES[$component]:-}; do
+        if [[ $dep_failed -eq 1 ]]; then break; fi
+        if ! is_compiled "$dep"; then
+            compile_one "$dep" || dep_failed=1
+        fi
+    done
+    if [[ $dep_failed -eq 1 ]]; then
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}Skip >>> $component (dependency failed)${NC}"
+        touch "./build/.failed_${component}"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        return 1
+    fi
+
+    if is_compiled "$component"; then
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${PURPLE}Skip >>> $component (already compiled)${NC}"
+        return 0
+    fi
+
+    echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${BLUE}Starting >>> $component${NC}"
+    local start_time=$(date +%s)
+
+    cd "$component" || {
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}Failed <<< $component [0s] (directory not found)${NC}"
+        touch "../build/.failed_${component}"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        return 1
+    }
+    local res=0
+    if [[ -f "./run.sh" ]]; then
+        ./run.sh "$build_modle" "$root_path" "$COMPILE_THREADS" || res=1
+    else
+        mkdir -p build && cd build
+        cmake .. || res=1
+        if [[ $res -eq 0 ]]; then
+            cmake --build . -j${COMPILE_THREADS} || res=1
+        fi
+    fi
+    cd "$root_path"
+
+    local elapsed_str="$(( $(date +%s) - start_time ))s"
+    if [[ $res -eq 0 ]]; then
+        mark_compiled "$component"
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${GREEN}Finished <<< $component [${elapsed_str}]${NC}"
+    else
+        touch "./build/.failed_${component}"
+        FAILED_COUNT=$((FAILED_COUNT + 1))
+        echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${RED}Failed <<< $component [${elapsed_str}]${NC}"
+        return 1
+    fi
+}
+
+# ===================== Main =====================
+if [[ "$build_modle" == "force" ]]; then
+    rm -rf ./build/.compiled_* ./build/.failed_*
+fi
+rm -rf ./build/logs
+
+echo "[$(date +'%Y-%m-%d %H:%M:%S')] Starting sequential build of ${#COMPONENTS[@]} ROS2 component(s)"
+echo "========================================================"
+for comp in "${COMPONENTS[@]}"; do
+    compile_one "$comp" || true
+done
+
+# ===================== Summary =====================
+end_total_time=$(date +%s)
+total_elapsed_time=$((end_total_time - start_total_time))
+SUCCESS_COUNT=$(find ./build -maxdepth 1 -name '.compiled_*' 2>/dev/null | wc -l)
+
+echo ""
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${YELLOW}=== RTEMS-ROS2 Build Summary ===${NC}"
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] Total components: ${#COMPONENTS[@]}"
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] Succeeded: ${GREEN}${SUCCESS_COUNT}${NC}"
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] Failed: ${RED}${FAILED_COUNT}${NC}"
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] Elapsed: ${total_elapsed_time}s"
+echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] ${YELLOW}=== Build finished ===${NC}"
+
+exit $((FAILED_COUNT > 0 ? 1 : 0))

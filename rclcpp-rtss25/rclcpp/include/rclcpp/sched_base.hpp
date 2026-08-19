@@ -1,0 +1,155 @@
+#ifndef RCLCPP__SCHED_BASE_HPP_
+#define RCLCPP__SCHED_BASE_HPP_
+#include <sched.h>
+#ifdef RTEMS
+#include <rtems.h>
+#else
+#include <sys/syscall.h>
+#endif
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <cstring>
+#include <pthread.h>
+#include <atomic>
+#include <iostream>
+
+#define FIFO_PATH "/proc/pure-edf"
+
+#if defined(__x86_64__) || defined(_M_X64)
+    #define PADDING_SIZE 90
+#elif defined(RTEMS)
+    #define PADDING_SIZE 6
+#else
+    #define PADDING_SIZE 26
+#endif
+
+namespace rclcpp {
+// forward declarations
+namespace executors {
+    class SingleThreadedExecutor;
+    class NoExecutor;
+}; // rclcpp::executors
+namespace sched {
+
+struct pthread_struct {
+    void* __pad[PADDING_SIZE];
+    pid_t tid;
+};
+
+struct SchedAttr {
+    uint32_t size = sizeof(SchedAttr);              /* Size of this structure */
+    uint32_t sched_policy = SCHED_RR;      /* Policy (SCHED_*) */
+    uint64_t sched_flags = 0;       /* Flags */
+    int32_t  sched_nice = 0;        /* Nice value (SCHED_OTHER, SCHED_BATCH) */
+    uint32_t sched_priority = 10;    /* Staticq priority (SCHED_FIFO, SCHED_RR) */
+
+    /* For SCHED_DEADLINE */
+    uint64_t sched_runtime = 0;
+    uint64_t sched_deadline = 0;
+    uint64_t sched_period = 0;
+
+    /* Utilization hints, unused for our purpose,
+       may enable in the future*/
+    uint32_t sched_util_min = 0;
+    uint32_t sched_util_max = 0;
+};
+
+
+/** Since pthread does not expose pid to us, this is a hack to get the (linux) pid.
+ *  This might be dangerous and non-portable.
+ */
+inline pid_t
+get_pid(pthread_t threadid) {
+    auto pthread_id = ((pthread_struct*) threadid);
+    /* this may occur if the thread is detached from the current thread, use this
+       function before calling detach() */
+    if (pthread_id == nullptr) {
+        printf("nullptr is passed to get_pid!\n");
+        return 0;
+    }
+    return pthread_id->tid;
+}
+
+/** Equality for SchedAttr, use it to prevent unnecessary syscall. */
+inline bool
+operator==(const SchedAttr& lhs, const SchedAttr& rhs) {
+    return std::memcmp(&lhs, &rhs, sizeof(SchedAttr)) == 0;
+}
+
+/** Inequality for SchedAttr, use it to prevent unnecessary syscall. */
+inline bool
+operator!=(const SchedAttr& lhs, const SchedAttr& rhs) {
+    return !(lhs==rhs);
+}
+
+inline long
+syscall_sched_setattr(pid_t pid, SchedAttr* sched_attr) {
+#ifdef RTEMS
+    /* RTEMS: use pthread_setschedparam instead of Linux sched_setattr */
+    struct sched_param sp = {};
+    sp.sched_priority = sched_attr->sched_priority;
+    int policy = sched_attr->sched_policy;
+    /* Find the thread with this pid and set its scheduling.
+     * On RTEMS, pid == task_id in many contexts, so we try direct set. */
+    return pthread_setschedparam((pthread_t)pid, policy, &sp) == 0 ? 0 : -1;
+#else
+    return syscall(SYS_sched_setattr, pid, sched_attr, 0);
+#endif
+}
+
+namespace {
+    struct EDF_attr_struct {
+        pid_t pid;
+        uint64_t abs_deadline;
+    };
+}
+
+
+class PureEDF {
+public:
+    static bool pure_edf_init() {
+        pure_edf_fd = open(FIFO_PATH, O_WRONLY);
+        return pure_edf_fd != -1;
+    }
+    static void pure_edf_deinit() {
+        close(pure_edf_fd);
+    }
+    uint64_t abs_deadline;
+    friend bool update_deadline(pthread_t pthread_id, PureEDF* edf_attr);
+private:
+    static int pure_edf_fd;
+};
+
+bool update_deadline(pthread_t pthread_id, PureEDF* edf_attr);
+
+struct edf_sched_entity {
+    uint64_t relative_deadline;
+    PureEDF* edf_attr = nullptr;
+    bool is_source = false;
+};
+
+class SchedBase {
+friend class executors::SingleThreadedExecutor;
+friend class executors::NoExecutor;
+public:
+    virtual ~SchedBase() = default;
+    virtual void
+    set_sched_attr(const SchedAttr& sched_attr);
+
+    virtual void
+    set_edf_attr(PureEDF* edf_attr);
+
+    virtual void
+    set_edf_entity(const edf_sched_entity& sched_entity);
+
+    SchedAttr sched_attr;
+    edf_sched_entity sched_entity;
+};
+
+
+
+}; // rclcpp::sched
+}; //rclcpp
+
+#endif

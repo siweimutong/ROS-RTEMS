@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+# A Waf script to build an RTEMS project with static libraries
+
+from __future__ import print_function
+
+rtems_version = "5"
+
+try:
+    import rtems_waf.rtems as rtems
+except ImportError:
+    print('error: no rtems_waf git submodule')
+    import sys
+    sys.exit(1)
+
+def init(ctx):
+    rtems.init(ctx, version=rtems_version, long_commands=True)
+    ctx.load('compiler_cxx')  # 确保加载 C++ 编译器
+
+def bsp_configure(conf, arch_bsp):
+    # 这里可以进行 BSP 相关的配置检查
+    pass
+
+def options(opt):
+    rtems.options(opt)
+
+def configure(conf):
+    rtems.configure(conf, bsp_configure=bsp_configure)
+
+def build(bld):
+    rtems.build(bld)
+
+    # fastrtps-master 目标（静态库）
+    # 编译和链接静态库
+    bld.stlib(
+        target='fastrtps-master',
+        source=['init.c',
+            '../../code/thirdparty/boost/include/stub/rtems_flock_stub.cpp',
+            '../../code/thirdparty/boost/include/stub/rtems_posix_stub.cpp',
+            '../../code/thirdparty/boost/include/stub/rtems_shm_stub.cpp',
+         '../../code/src/cpp/fastrtps_deprecated/attributes/TopicAttributes.cpp', '../../code/src/cpp/fastdds/core/Entity.cpp', '../../code/src/cpp/fastdds/core/condition/Condition.cpp', '../../code/src/cpp/fastdds/core/condition/ConditionNotifier.cpp', '../../code/src/cpp/fastdds/core/condition/GuardCondition.cpp', '../../code/src/cpp/fastdds/core/condition/StatusCondition.cpp', '../../code/src/cpp/fastdds/core/condition/StatusConditionImpl.cpp', '../../code/src/cpp/fastdds/core/condition/WaitSet.cpp', '../../code/src/cpp/fastdds/core/condition/WaitSetImpl.cpp', '../../code/src/cpp/fastdds/core/policy/ParameterList.cpp', '../../code/src/cpp/fastdds/core/policy/QosPolicyUtils.cpp', '../../code/src/cpp/fastdds/publisher/qos/WriterQos.cpp', '../../code/src/cpp/fastdds/subscriber/qos/ReaderQos.cpp', '../../code/src/cpp/rtps/builtin/BuiltinProtocols.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/DirectMessageSender.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDP.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDPSimple.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDPListener.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDP.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPSimple.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPSimpleListeners.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPStatic.cpp', '../../code/src/cpp/rtps/builtin/liveliness/WLP.cpp', '../../code/src/cpp/rtps/builtin/liveliness/WLPListener.cpp', '../../code/src/cpp/rtps/builtin/data/ParticipantProxyData.cpp', '../../code/src/cpp/rtps/builtin/data/WriterProxyData.cpp', '../../code/src/cpp/rtps/builtin/data/ReaderProxyData.cpp', '../../code/src/cpp/rtps/flowcontrol/ThroughputControllerDescriptor.cpp', '../../code/src/cpp/rtps/flowcontrol/FlowControllerConsts.cpp', '../../code/src/cpp/rtps/flowcontrol/FlowControllerFactory.cpp', '../../code/src/cpp/rtps/exceptions/Exception.cpp', '../../code/src/cpp/rtps/attributes/PropertyPolicy.cpp', '../../code/src/cpp/rtps/common/Token.cpp', '../../code/src/cpp/rtps/xmlparser/XMLParserCommon.cpp', '../../code/src/cpp/rtps/xmlparser/XMLElementParser.cpp', '../../code/src/cpp/rtps/xmlparser/XMLDynamicParser.cpp', '../../code/src/cpp/rtps/xmlparser/XMLEndpointParser.cpp', '../../code/src/cpp/rtps/xmlparser/XMLParser.cpp', '../../code/src/cpp/rtps/xmlparser/XMLProfileManager.cpp', '../../code/src/cpp/rtps/writer/PersistentWriter.cpp', '../../code/src/cpp/rtps/writer/StatelessPersistentWriter.cpp', '../../code/src/cpp/rtps/writer/StatefulPersistentWriter.cpp', '../../code/src/cpp/rtps/reader/StatelessPersistentReader.cpp', '../../code/src/cpp/rtps/reader/StatefulPersistentReader.cpp', '../../code/src/cpp/rtps/persistence/PersistenceFactory.cpp', '../../code/src/cpp/rtps/builtin/discovery/database/backup/SharedBackupFunctions.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPClient.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPServer.cpp', '../../code/src/cpp/rtps/builtin/discovery/endpoint/EDPServerListeners.cpp', '../../code/src/cpp/rtps/builtin/discovery/database/DiscoveryDataBase.cpp', '../../code/src/cpp/rtps/builtin/discovery/database/DiscoveryParticipantInfo.cpp', '../../code/src/cpp/rtps/builtin/discovery/database/DiscoveryParticipantsAckStatus.cpp', '../../code/src/cpp/rtps/builtin/discovery/database/DiscoverySharedInfo.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDPClient.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDPServer.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/PDPServerListener.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/timedevent/DSClientEvent.cpp', '../../code/src/cpp/rtps/builtin/discovery/participant/timedevent/DServerEvent.cpp', '../../code/src/cpp/utils/md5.cpp', '../../code/src/cpp/utils/StringMatching.cpp', '../../code/src/cpp/utils/IPLocator.cpp', '../../code/src/cpp/utils/System.cpp', '../../code/src/cpp/utils/SystemInfo.cpp', '../../code/src/cpp/utils/TimedConditionVariable.cpp', '../../code/src/cpp/utils/string_convert.cpp', '../../code/src/cpp/dds/core/types.cpp', '../../code/src/cpp/dds/core/Exception.cpp', '../../code/src/cpp/dds/domain/DomainParticipant.cpp', '../../code/src/cpp/dds/pub/Publisher.cpp', '../../code/src/cpp/dds/pub/AnyDataWriter.cpp', '../../code/src/cpp/dds/pub/DataWriter.cpp', '../../code/src/cpp/dds/sub/Subscriber.cpp', '../../code/src/cpp/dds/sub/DataReader.cpp', '../../code/src/cpp/dds/topic/Topic.cpp', '../../code/src/cpp/statistics/fastdds/domain/DomainParticipant.cpp', '../../code/src/cpp/statistics/fastdds/publisher/qos/DataWriterQos.cpp', '../../code/src/cpp/statistics/fastdds/subscriber/qos/DataReaderQos.cpp', '../../code/src/cpp/rtps/transport/shared_mem/test_SharedMemTransport.cpp', '../../code/src/cpp/rtps/transport/shared_mem/SharedMemTransport.cpp', '../../code/src/cpp/rtps/transport/TCPChannelResourceSecure.cpp', '../../code/src/cpp/rtps/transport/TCPAcceptorSecure.cpp', '../../code/src/cpp/rtps/persistence/SQLite3PersistenceService.cpp', '../../code/src/cpp/rtps/persistence/sqlite3.c'],
+        includes=['/root/RTEMS/quick-start/rtems/5/arm-rtems5/include', '../../code/include/', '../../code/src/cpp/', '../../code/build/include/', '../../code/test/mock/rtps/RTPSParticipantImpl/', '../../code/thirdparty/boost/include/', '../../code/thirdparty/nlohmann-json/', '../../code/thirdparty/taocpp-pegtl/', '../../../Fast-CDR/code/include/', '../../../Fast-CDR/code/build/include/', '../../../memory-main/code/include/', '../../../memory-main/code/build/src/', '../../../memory-main/code/build/src', '../../code/asio/include/', '../../../tinyxml2/code/include/'],
+        defines=[
+            "RTEMS",
+            "TLS_FOUND=0",
+            "ASIO_NO_SSL=1",
+            "ASIO_DISABLE_SSL=1",
+            "IP_MULTICAST_LOOP=34",
+            "IP_ADD_MEMBERSHIP=35",
+            "ESHUTDOWN=108",
+            "IP_MULTICAST_IF=32",
+            "IP_MULTICAST_TTL=33",
+            "ASIO_DISABLE_SIGNAL_SET=1",
+            "PF_UNSPEC=0",
+            "PF_INET6=10",
+            "ASIO_STANDALONE",
+            "ASIO_IPV4_ONLY=1",
+            "ASIO_HAS_NO_EXCEPTIONS=1",
+            "BOOST_HAS_UNISTD_H",
+            # "ASIO_HAS_PTHREADS",
+            # "ASIO_HAS_THREADS",
+            "ASIO_DISABLE_THREADS",
+            "ASIO_DISABLE_POSIX_SIGNAL_BLOCKS=1",
+            "AF_INET6=0",
+            "INET6_ADDRSTRLEN=46",
+            "IPV6_MULTICAST_IF=0",
+            "IPV6_MULTICAST_HOPS=0",
+            "IPV6_MULTICAST_LOOP=0",
+            "IPV6_JOIN_GROUP=0",
+            "IPV6_LEAVE_GROUP=0",
+            "IPV6_UNICAST_HOPS=0",
+            "IPV6_V6ONLY=0",
+            "ASIO_DISABLE_IPV6=1",
+            "ASIO_HAS_IPV6=0",
+            "ASIO_NO_IPV6=1",
+            # "ASIO_OS_DEF_AF_INET6=0",
+            "ASIO_DISABLE_IPV6_ITERATOR=1",
+            "ASIO_IPV6_ADDRESS_DISABLED=1",
+            "ASIO_IPV6_ENDPOINT_DISABLED=1",
+            "ASIO_DETAIL_SOCKADDR_IN6_TYPE=void",
+            "BOOST_INTERPROCESS_DISABLE_POSIX_FILE_LOCKS=1",
+            "BOOST_INTERPROCESS_DISABLE_FILESYSTEM=1",
+            "BOOST_INTERPROCESS_POSIX_API=0",
+            "ASIO_DISABLE_IPV6=1",
+            "ASIO_HAS_IPV6=0",
+            "ASIO_HAS_IP_MULTICAST=1",
+            "IPPROTO_IPV6=41",
+            "IPPROTO_ICMPV6=58",
+            "IP_TTL=2",
+            "IP_DROP_MEMBERSHIP=36"
+        ],
+        cxxflags='-Wno-psabi -fpermissive -fexceptions -frtti -std=c++17 -Wno-register -g -Wno-unknown-pragmas -fPIC',
+        linkflags='-static',
+        lib=['tinyxml2', 'foonathan_memory', 'fastcdr', 'fastrtps_pre', 'stdc++', 'rtemscpu', 'rtemsbsp', 'rtemsdefaultconfig', 'm', 'gcc', 'c'],
+    )

@@ -1,0 +1,209 @@
+\section{The Nested Scheduling Problem in ROS~2}
+
+This section analyzes the root cause of real-time deficiencies in the standard ROS~2 execution model.
+We first describe the Executor architecture, then formalise the nested scheduling problem, validate the resulting limitations through targeted motivating experiments, argue why it can be eliminated on a true RTOS, and finally present the RTEMS timer mechanism that underpins our TimeManager design.
+
+\subsection{ROS~2 Executor Architecture}
+
+The ROS~2 middleware dispatches user callbacks through the \texttt{rclcpp} Executor, which implements a three-phase event loop:
+\begin{enumerate}
+    \item \textbf{Wait.} The Executor calls \texttt{rcl\_wait}, which blocks until at least one callback-generating entity (timer, subscription, service, client) becomes ready.
+    \item \textbf{Collect.} \texttt{get\_next\_executable} scans the wait-set and returns a ready callback.
+    \item \textbf{Execute.} The callback function is invoked on the calling thread.
+\end{enumerate}
+This cycle repeats for the lifetime of the Executor.
+
+The \texttt{SingleThreadedExecutor} runs the entire cycle on a single thread.
+All ready callbacks are dispatched in FIFO order: the first callback to become ready is the first to execute, regardless of any logical priority the application may assign.
+Since only one callback runs at a time, there is no concurrency within the Executor, and high-priority callbacks must wait for any lower-priority callback that entered the ready set earlier.
+
+The \texttt{MultiThreadedExecutor} maintains a thread pool and a mutex-protected wait-set.
+Multiple threads may execute callbacks concurrently, but mutual exclusion is enforced by the \emph{CallbackGroup} mechanism.
+A \texttt{MutuallyExclusive} callback group ensures that at most one callback from the group executes at any time---internally implemented via a mutex.
+A \texttt{Reentrant} callback group imposes no such constraint, allowing multiple callbacks from the same group to execute in parallel.
+While the \texttt{MultiThreadedExecutor} introduces concurrency, it does not introduce priority-aware dispatch: ready callbacks are still assigned to available threads in FIFO or round-robin fashion.
+
+Because the Executor implements its own scheduling logic on top of the OS thread scheduler, a \emph{nested scheduling} structure emerges: the Executor layer decides \emph{which} callback to run next, while the OS layer decides \emph{which} thread to run next.
+These two layers operate independently and without priority coordination, forming the root cause of the problems we analyse below.
+
+\subsection{Formalisation of the Nested Scheduling Problem}
+
+We recall the classic real-time scheduling model~\cite{liu1973scheduling}.
+A task set $\mathcal{T} = \{\tau_1, \tau_2, \dots, \tau_n\}$ consists of $n$ sporadic or periodic tasks, each characterized by a period (or minimum inter-arrival time) $T_i$, a worst-case execution time $C_i$, and a relative deadline $D_i$.
+Under fixed-priority preemptive (FPP) scheduling, each task is assigned a static priority $\pi_i$, and the highest-priority ready task always preempts lower-priority ones.
+This model provides well-established schedulability tests~\cite{liu1973scheduling} and response-time analysis.
+
+In ROS~2, the schedulable entities are not OS tasks but \emph{callbacks}.
+Let $\Gamma = \{\gamma_1, \gamma_2, \dots, \gamma_n\}$ denote the set of callbacks registered with an Executor.
+Each callback $\gamma_i$ has an implicit urgency: a timer callback controlling a 1\,kHz control loop is more time-critical than a timer callback logging diagnostics at 10\,Hz.
+However, the standard Executor \emph{does not model or use this priority information}.
+Instead, it maintains a ready queue and dispatches callbacks in FIFO order (for \texttt{SingleThreadedExecutor}) or round-robin among threads (for \texttt{MultiThreadedExecutor}).
+
+The nested scheduling structure in ROS~2 can be modeled as two independent schedulers operating at different abstraction layers:
+\begin{itemize}
+    \item \textbf{Executor layer.} A callback-level scheduler that selects the next ready callback from the wait-set using FIFO or round-robin policy. It is unaware of OS thread priorities and treats all callbacks as having equal priority.
+    \item \textbf{OS layer.} A thread-level scheduler (e.g., Linux CFS or \texttt{SCHED\_FIFO}) that selects the next runnable thread based on thread priorities. It is unaware of callback priorities, since multiple callbacks of different urgencies may share the same Executor thread.
+\end{itemize}
+
+The fundamental issue is an \emph{information gap}: the Executor does not know the OS-level thread priorities, and the OS does not know the application-level callback priorities.
+Consequently, the OS cannot make informed preemption decisions at the callback granularity, and the Executor cannot leverage OS-level priority mechanisms.
+Formally, let $\pi^{\text{OS}}_k$ denote the OS priority of the $k$-th thread, and let $\pi^{\text{app}}_i$ denote the application-level priority of callback $\gamma_i$.
+If callbacks $\gamma_i$ and $\gamma_j$ with $\pi^{\text{app}}_i > \pi^{\text{app}}_j$ are both dispatched to the same thread $k$, then the OS priority $\pi^{\text{OS}}_k$ cannot simultaneously reflect both $\pi^{\text{app}}_i$ and $\pi^{\text{app}}_j$.
+The effective priority of each callback is thus lost at the Executor--OS boundary.
+
+\subsection{Experimental Validation of Executor Scheduling Limitations}
+
+To validate that the deficiencies above are caused by the Executor scheduling structure rather than by incidental system noise, we design a set of phase-controlled motivating experiments on RTEMS~6.1 running on the ARM \texttt{realview\_pbx\_a9\_qemu} platform (1~tick = 1~ms). All timestamps are recorded using \texttt{rtems\_clock\_get\_uptime} with sub-tick (nanosecond) resolution. The key idea is to make callback readiness observable and controllable: a low-urgency callback $\gamma_\ell$ is deliberately released slightly before a high-urgency callback $\gamma_h$, and we then measure whether $\gamma_h$ can preempt or bypass $\gamma_\ell$. Each experiment includes a FIFO-based Executor scenario (A) and an RTOS fixed-priority preemptive scenario (B) for comparison.
+
+For each callback $\gamma_i$, we record three timestamps: its readiness time $r_i$, actual execution start time $s_i$, and finish time $f_i$. The main metric is the dispatch latency $L_i=s_i-r_i$, and the response time is $R_i=f_i-r_i$. For the high-priority callback, a dispatch latency $L_h$ that grows with the execution time of a lower-priority callback is direct evidence of callback-level priority inversion. Unless otherwise stated, callback execution time is generated by CPU-bound busy waiting rather than sleeping, so that the experiment models non-preemptive callback execution inside the Executor.
+
+\textbf{E1: Priority inversion under varying high-priority period and task count.}
+This experiment jointly evaluates two factors that determine priority inversion severity: (i)~the high-priority period $T_h$, which controls how often $\gamma_h$ encounters a busy Executor, and (ii)~the total task count $n = 1 + k$, where $k$ low-priority callbacks ($C_\ell = 10$~ms, period $= 20$~ms) compete with one high-priority callback ($C_h = 2$~ms, period $T_h$) in a \texttt{SingleThreadedExecutor}. We sweep $T_h \in \{5, 10, 20, 40\}$~ms and $n \in \{2, 3, 4, 5, 6\}$, measuring the average high-priority dispatch latency $\overline{L_h}$.
+
+\begin{table}[t]
+\centering
+\caption{E1: Average high-priority dispatch latency $\overline{L_h}$ ($\mu$s) under FIFO dispatch (Scenario~A). Low-priority period = 20~ms, $C_\ell = 10$~ms, $C_h = 2$~ms.}
+\label{tab:e1_fifo}
+\begin{tabular}{c|ccccc}
+\hline
+$T_h$ (ms) \textbackslash\ $n$ & 2 & 3 & 4 & 5 & 6 \\
+\hline
+5   & 3\,643   & 35\,793  & 53\,531  & 65\,338  & 66\,865 \\
+10  & 5\,742   & 28\,281  & 56\,399  & 64\,042  & 68\,632 \\
+20  & 10\,013  & 28\,069  & 60\,048  & 73\,045  & 82\,043 \\
+40  & 19       & 4\,078   & 32\,068  & 41\,063  & 75\,398 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{E1: Average high-priority dispatch latency $\overline{L_h}$ ($\mu$s) under RTOS fixed-priority preemptive scheduling (Scenario~B). Same parameters as Table~\ref{tab:e1_fifo}.}
+\label{tab:e1_rtos}
+\begin{tabular}{c|ccccc}
+\hline
+$T_h$ (ms) \textbackslash\ $n$ & 2 & 3 & 4 & 5 & 6 \\
+\hline
+5   & 15.2 & 10.0 & 8.7 & 9.7 & 8.7 \\
+10  & 14.5 & 18.2 & 12.4 & 14.8 & 13.8 \\
+20  & 11.9 & 11.9 & 9.3 & 9.3 & 9.5 \\
+40  & 15.1 & 20.2 & 22.5 & 20.3 & 22.3 \\
+\hline
+\end{tabular}
+\end{table}
+
+Tables~\ref{tab:e1_fifo} and~\ref{tab:e1_rtos} present the results. Under FIFO dispatch (Table~\ref{tab:e1_fifo}), $\overline{L_h}$ increases sharply with $n$: when $n=2$ (one low-priority callback), the latency is modest ($3.6$--$10$~ms depending on $T_h$), but with $n=6$ (five low-priority callbacks), it reaches $66$--$82$~ms, reflecting cumulative queueing of low-priority callbacks ahead of $\gamma_h$. The CPU utilisation of the $k$ low-priority tasks is $k C_\ell / 20\,\text{ms}$; at $k=2$ the system is fully loaded (100\%), and beyond that the FIFO queue grows without bound during each period. Under RTOS fixed-priority scheduling (Table~\ref{tab:e1_rtos}), $\overline{L_h}$ remains below $23\,\mu$s in all configurations---three to four orders of magnitude lower---because the high-priority task immediately preempts any executing low-priority task.
+
+\textbf{E2: Ineffectiveness of OS-level real-time priority for intra-Executor inversion.}
+To test whether raising the Executor thread priority can remove the inversion, we run a single low-priority and a single high-priority callback ($C_\ell = 30$~ms, $C_h = 2$~ms, $\Delta = 1$~ms, period $= 60$~ms) while sweeping the Executor thread's RTOS priority over $\{5, 10, 20, 40\}$.
+
+\begin{table}[t]
+\centering
+\caption{E2: Average high-priority dispatch latency ($\mu$s) at different Executor priorities. $C_\ell = 30$~ms, $C_h = 2$~ms.}
+\label{tab:e2}
+\begin{tabular}{lcc}
+\hline
+\textbf{Setting} & $\overline{L_h}$ ($\mu$s) & $\overline{L_h}^{\max}$ ($\mu$s) \\
+\hline
+FIFO, priority 5  & 30\,060 & 30\,200 \\
+FIFO, priority 10 & 29\,080 & 29\,142 \\
+FIFO, priority 20 & 29\,090 & 29\,157 \\
+FIFO, priority 40 & 29\,062 & 29\,083 \\
+RTOS (separate tasks) & 16.5 & --- \\
+\hline
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:e2} shows that $\overline{L_h}$ remains at approximately $29$~ms (i.e., $C_\ell - \Delta$) regardless of the Executor's OS priority. Raising the Executor thread to the highest RTOS priority (5) does not reduce $L_h$, because the blocking is internal to the Executor: once a low-priority callback begins executing on the Executor thread, no OS-level priority mechanism can preempt it at the callback granularity. Only when each callback runs in its own RTOS task (bottom row) does the latency drop to near zero.
+
+\textbf{E3: Serialization caused by MutuallyExclusive callback groups.}
+We evaluate the \texttt{MultiThreadedExecutor} with both $\gamma_h$ and $\gamma_\ell$ in the same \texttt{MutuallyExclusive} callback group (simulated by a shared binary semaphore). $C_\ell = 30$~ms, $C_h = 2$~ms, $\Delta = 1$~ms, period $= 60$~ms. The thread-pool size $m$ is swept over $\{1, 2, 4\}$.
+
+\begin{table}[t]
+\centering
+\caption{E3: High-priority dispatch latency ($\mu$s) under MutuallyExclusive serialization.}
+\label{tab:e3}
+\begin{tabular}{lcc}
+\hline
+\textbf{Setting} & $\overline{L_h}$ ($\mu$s) & $\overline{L_h}^{\max}$ ($\mu$s) \\
+\hline
+Mutex, $m=1$ & 29\,338 & 30\,195 \\
+Mutex, $m=2$ & 29\,076 & 29\,098 \\
+Mutex, $m=4$ & 29\,059 & 29\,094 \\
+RTOS (no mutex) & 16.8 & 26.7 \\
+\hline
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:e3} confirms that increasing the thread-pool size from 1 to 4 has negligible effect: the mutual-exclusion constraint ensures that only one callback executes at a time regardless of available threads, and $\overline{L_h} \approx 29$~ms in all cases. The RTOS comparison (without the mutex, each callback in a separate prioritized task) achieves $\overline{L_h} = 16.8\,\mu$s.
+
+\textbf{E4: Timer dispatch jitter caused by the Executor event loop.}
+We evaluate whether a high-frequency timer can provide stable dispatch under callback interference. A 100~Hz high-priority timer ($C_h = 1$~ms) runs together with an occasional long-running low-priority callback ($C_\ell = 30$~ms, one-shot at $t = 50$~ms). For the $j$-th timer release, we compute the dispatch delay $s_j - e_j$ and inter-arrival jitter $|(s_j - s_{j-1}) - T|$.
+
+\begin{table}[t]
+\centering
+\caption{E4: Timer dispatch delay and inter-arrival jitter ($\mu$s) with and without low-priority interference. $T = 10$~ms.}
+\label{tab:e4}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Scenario} & Delay avg & Delay max & Jitter avg & Jitter max \\
+\hline
+FIFO Executor  & 334 & 8\,048 & 2\,261 & 28\,000 \\
+RTOS priority  & 0   & 0      & 10    & 50 \\
+\hline
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:e4} shows that under the FIFO Executor, the low-priority callback creates a dispatch delay spike of up to $8.0$~ms and a jitter spike of $28$~ms when it occupies the Executor during the timer's scheduled firing window. Under RTOS priority scheduling, both the delay and jitter remain negligible, confirming that timer dispatch is deterministic when each timer callback executes in a dedicated prioritized task.
+
+Together, these experiments provide direct empirical evidence of the nested scheduling problem. E1 shows that FIFO dispatch latency grows with both the number of low-priority tasks and their cumulative load, E2 demonstrates that raising the OS thread priority cannot fix intra-Executor inversion, E3 confirms that \texttt{MutuallyExclusive} groups serialize regardless of thread count, and E4 shows that timer dispatch jitter spikes when the Executor is occupied. These observations motivate replacing the Executor-centric dispatch path with an RTOS-backed design in which each callback or timer service is mapped to a schedulable task with an explicit priority.
+
+\subsection{Why Nested Scheduling Can Be Eliminated on RTOS}
+
+A real-time operating system provides the scheduling primitives that the ROS~2 Executor lacks:
+\begin{itemize}
+    \item \textbf{Deterministic fixed-priority preemptive scheduling.} The RTOS kernel guarantees that the highest-priority ready task always runs, with a bounded preemption latency.
+    \item \textbf{Priority inheritance protocol.} When a high-priority task is blocked by a lower-priority task holding a shared resource, the lower-priority task temporarily inherits the high priority, bounding the inversion duration.
+    \item \textbf{Predictable interrupt latency.} The time from a hardware interrupt to the start of the associated ISR is bounded and typically on the order of microseconds, not milliseconds as on general-purpose Linux.
+    \item \textbf{Fine-grained task priority configuration.} Each RTOS task can be assigned a distinct priority from a wide range (e.g., 1--255 in RTEMS), enabling precise differentiation of callback urgencies.
+\end{itemize}
+
+The key insight is that \emph{if each ROS~2 callback maps directly to an RTOS task with its own priority, the middleware-level scheduling performed by the Executor becomes entirely redundant}.
+The RTOS scheduler already provides the priority-aware, preemptive dispatch that the Executor fails to implement.
+By eliminating the Executor's internal dispatch and delegating all scheduling decisions to the RTOS kernel, we collapse the two-layer nested scheduling into a single, well-understood scheduling layer.
+
+This approach is consistent in spirit with the CallbackIsolatedExecutor~\cite{ishikawa2025rtas}, which maps each callback to a dedicated \texttt{SCHED\_FIFO} thread on Linux.
+However, CallbackIsolatedExecutor remains subject to the nondeterminism of the Linux kernel: CFS time slicing, unbounded interrupt latency, and the lack of guaranteed priority inheritance for user-space synchronization primitives.
+By contrast, our approach operates on a true RTOS (RTEMS), where the scheduler provides deterministic guarantees, interrupt latency is bounded, and priority inheritance is a kernel-level primitive.
+The EventsExecutor~\cite{teper2024rtss} similarly bridges ROS~2 with classic fixed-priority scheduling, but it too is constrained by the Linux kernel's nondeterministic behavior.
+Our work eliminates the middleware scheduling layer entirely on an RTOS where the OS scheduler can fully and reliably take over.
+
+\subsection{RTEMS~6.1 Timer Mechanism}
+
+Our TimeManager design (Section~IV) leverages the native RTEMS timer mechanism.
+This subsection describes the relevant internals of RTEMS~6.1.
+
+RTEMS manages timers through two key data structures: \texttt{Timer\_Control} and \texttt{Watchdog\_Control}.
+When an application creates a timer via \texttt{rtems\_timer\_create}, the kernel allocates a \texttt{Timer\_Control} block.
+Firing a timer with \texttt{rtems\_timer\_server\_fire\_after} inserts a \texttt{Watchdog\_Control} node into a red-black tree indexed by expiration tick.
+The red-black tree ensures $O(\log n)$ insertion and removal of timer entries, where $n$ is the number of active timers.
+
+The execution flow from hardware interrupt to callback invocation proceeds as follows:
+\begin{enumerate}
+    \item \textbf{Hardware tick interrupt.} A hardware timer generates a periodic tick interrupt at the configured frequency (e.g., 1\,kHz).
+    \item \textbf{Clock Tick ISR.} The interrupt service routine increments the system tick counter and triggers the Watchdog chain.
+    \item \textbf{Watchdog expiration.} The kernel traverses the red-black tree and identifies all \texttt{Watchdog\_Control} nodes whose expiration tick is less than or equal to the current tick. Each expired watchdog is removed from the tree and enqueued for processing.
+    \item \textbf{Timer Server execution.} Expired watchdogs are dispatched to the \emph{Timer Server} task---a dedicated RTEMS task that executes the registered callback functions in task context (not ISR context), ensuring that callbacks can invoke blocking OS services.
+\end{enumerate}
+
+A critical feature of this mechanism is the priority ordering of the involved tasks.
+In our configuration, the Timer Server task runs at the highest application priority (priority~1 in RTEMS, where lower numbers indicate higher priority), followed by Worker tasks at priority~5, and the Executor spin thread at priority~50.
+This strict priority hierarchy ensures that:
+\begin{itemize}
+    \item The Timer Server preempts any Worker or Executor task, guaranteeing that timer callbacks are dispatched with minimal latency after the hardware tick.
+    \item Worker tasks executing subscription or service callbacks preempt the spin thread, preventing readiness detection from interfering with callback execution.
+    \item Priority inheritance applies when tasks contend for shared resources (e.g., the callback ready queue), bounding any remaining priority inversion.
+\end{itemize}
+
+This hardware-driven, priority-ordered timer mechanism provides the foundation for our TimeManager design.
+By registering ROS~2 timer callbacks as RTEMS timer server callbacks, we achieve jitter bounded by the tick resolution (1\,ms in our configuration), a dramatic improvement over the software timer approach in standard \texttt{rclcpp}, where timer expiration is checked only when the Executor's event loop reaches the wait phase.

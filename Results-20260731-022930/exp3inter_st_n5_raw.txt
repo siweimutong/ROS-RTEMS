@@ -1,0 +1,75 @@
+
+RTEMS Shell on /dev/console. Use 'help' to list commands.
+SHLL [/] # nexus0: <RTEMS Nexus device>
+info: lo0: link state changed to UP
+=== Exp3inter-ST: Task Chain (n=5) SingleThreadedExecutor ===
+Period: 200ms, Rounds: 500
+[E3IST-CSV] chain_len,round,e2e_ns,publish_ns,gc_trigger_ns,invoke_cb_ns,getnext_ns,take_data_ns,sched_ns,dispatch_ns
+666666
+CPP Msg not nullptr
+CPP Msg not nullptr
+CPP Msg not nullptr
+CPP Msg not nullptr
+C Msg not NULL
+C Msg not NULL
+CPP Srv not nullptr
+CPP Srv not nullptr
+CPP Srv not nullptr
+CPP Srv not nullptr
+CPP Srv not nullptr
+CPP Srv not nullptr
+CPP Msg not nullptr
+CPP Msg not nullptr
+CPP Msg not nullptr
+CPP Msg not nullptr
+
+*** FATAL ***
+fatal source: 9 (RTEMS_FATAL_SOURCE_EXCEPTION)
+
+R0   = 0x00d86708 R8  = 0x00000001
+R1   = 0x01598bb8 R9  = 0x00000001
+R2   = 0x01598bb8 R10 = 0x00000000
+R3   = 0x0000003c R11 = 0x00000000
+R4   = 0x00000000 R12 = 0x00000000
+R5   = 0x0168d1e8 SP  = 0x01598ba8
+R6   = 0x00bcd728 LR  = 0x0081147d
+R7   = 0x01598bb0 PC  = 0x00811596
+CPSR = 0x000f01f3 VEC = 0x00000004
+FPEXC = 0x40000000
+FPSCR = 0x20000010
+D00 = 0x41a7d78400000000
+D01 = 0x0000000000000000
+D02 = 0x0000000000000000
+D03 = 0x0000000000000000
+D04 = 0x0000000000000000
+D05 = 0x0000000000000000
+D06 = 0x0000000000000000
+D07 = 0x000186a00061a800
+D08 = 0x0000000000000000
+D09 = 0x0000000000000000
+D10 = 0x0000000000000000
+D11 = 0x0000000000000000
+D12 = 0x0000000000000000
+D13 = 0x0000000000000000
+D14 = 0x0000000000000000
+D15 = 0x0000000000000000
+D16 = 0x0000000000000000
+D17 = 0x4069000000000000
+D18 = 0x0000000000000000
+D19 = 0x0000000000000000
+D20 = 0x00fb00fa00f900f8
+D21 = 0x00ff00fe00fd00fc
+D22 = 0x00f300f200f100f0
+D23 = 0x00f700f600f500f4
+D24 = 0x000000fd000000fc
+D25 = 0x000000ff000000fe
+D26 = 0x000000f9000000f8
+D27 = 0x000000fb000000fa
+D28 = 0x0000000c0000000c
+D29 = 0x0000000c0000000c
+D30 = 0x0000000800000008
+D31 = 0x0000000800000008
+RTEMS version: 6.1.0.not-released
+RTEMS tools: 13.3.0 20240521 (RTEMS 6, RSB no-repo, Newlib 1b3dcfd)
+executing thread ID: 0x0a010001
+executing thread name: UI1 

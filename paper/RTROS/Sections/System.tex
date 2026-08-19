@@ -1,0 +1,189 @@
+\section{Porting ROS~2 to RTEMS}
+\label{sec:porting}
+
+This section describes the complete porting of the ROS~2 software stack to the RTEMS~6.1 real-time operating system on the ARM platform.
+Unlike micro-ROS, which targets constrained microcontrollers by providing only a subset of the ROS~2 API, our port preserves the full \texttt{rclcpp} programming model---including intra-process communication, lifecycle nodes, and the complete message ecosystem---so that existing ROS~2 applications can be rebuilt for RTEMS with minimal source changes.
+We organize the discussion around the five major challenges encountered during porting: platform selection and scope (Section~\ref{subsec:overview}), POSIX compatibility (Section~\ref{subsec:posix}), \texttt{rclcpp} adaptation (Section~\ref{subsec:rclcpp_adapter}), DDS communication (Section~\ref{subsec:dds}), and build/deployment (Section~\ref{subsec:build}).
+
+\subsection{Porting Overview}
+\label{subsec:overview}
+
+The target platform is the ARM \texttt{realview\_pbx\_a9\_qemu} Board Support Package (BSP) under RTEMS~6.1.
+This BSP provides a dual-core ARM Cortex-A9 emulation environment with a Generic Interrupt Controller (GIC), a hardware timer, and a VirtIO network device, making it suitable for both functional validation and real-time evaluation without physical hardware.
+
+Table~\ref{tab:ported_components} summarizes the ROS~2 components ported.
+The scope covers the entire \texttt{rclcpp} stack: the \texttt{rcl} C library, the \texttt{rclcpp} C++ library, the \texttt{rmw} abstraction layer, the \texttt{rmw\_fastrtps\_cpp} implementation, the \texttt{rosidl} message generation pipeline, the eProsima Fast-DDS middleware, and all standard message and service packages required by the \texttt{rclcpp} API.
+In total, 26 ROS~2 packages were cross-compiled and statically linked for the RTEMS target.
+
+\begin{table}[t]
+\centering
+\caption{Ported ROS~2 components}
+\label{tab:ported_components}
+\begin{tabular}{ll}
+\hline
+\textbf{Layer} & \textbf{Components} \\
+\hline
+Middleware    & Fast-DDS, rmw, rmw\_fastrtps\_cpp \\
+Core C library & rcl \\
+Core C++ library & rclcpp \\
+IDL / Messages & rosidl (adapter, typesupport, \\
+               & runtime), std\_msgs, geometry\_msgs, \\
+               & sensor\_msgs, \ldots \\
+Build tools   & ament\_cmake, RTcolcon \\
+\hline
+\end{tabular}
+\end{table}
+
+A key design decision was to port the \emph{full} \texttt{rclcpp} stack rather than the micro-ROS subset.
+Micro-ROS uses the Micro XRCE-DDS agent/client architecture, which introduces an additional network hop and does not support intra-process zero-copy communication---a feature critical for low-latency callback chains on a single processor.
+By retaining the standard \texttt{rclcpp} intra-process path, our port enables the RTExecutor (Section~\ref{sec:design}) to exploit shared-memory zero-copy data transfer within the same address space, avoiding serialization overhead entirely.
+
+The build system is based on cross-compilation: all packages are compiled on an x86-64 host using the \texttt{arm-rtems6-gcc}/\texttt{arm-rtems6-g++} cross-compiler with RTEMS~6.1 BSP headers and libraries.
+A custom build orchestrator, RTcolcon (Section~\ref{subsec:build}), manages the 26-component dependency graph and parallel compilation.
+
+\subsection{POSIX Compatibility Layer}
+\label{subsec:posix}
+
+RTEMS implements a POSIX-compliant subset (POSIX~1003.1-2008 profile), which covers most of the interfaces used by ROS~2's C libraries.
+However, several Linux-specific or GNU-extension APIs that \texttt{rcl} and its dependencies rely on are absent.
+Table~\ref{tab:posix_adaptations} summarizes the key adaptations.
+
+\begin{table}[t]
+\centering
+\caption{POSIX API adaptations for RTEMS}
+\label{tab:posix_adaptations}
+\begin{tabular}{p{2.1cm}p{2.1cm}p{3.0cm}}
+\hline
+\textbf{Linux API} & \textbf{RTEMS Replacement} & \textbf{Notes} \\
+\hline
+\texttt{pthread\_create} & \texttt{rtems\_task\_create} / \texttt{rtems\_task\_start} & RTEMS Classic API tasks \\
+\texttt{pthread\_mutex} & RTEMS binary semaphore & \texttt{RTEMS\_INHERIT\_PRIORITY} attribute \\
+\texttt{pthread\_cond} & RTEMS event + semaphore & Signal via \texttt{rtems\_event\_send}; wait via \texttt{rtems\_event\_receive} \\
+\texttt{clock\_gettime (CLOCK\_MONOTONIC)} & \texttt{rtems\_clock\_get\_ticks\_since\_boot} & Tick-based monotonic time \\
+\texttt{on\_exit} (GNU ext.) & \texttt{atexit} wrapper & Guarded by \texttt{\#ifdef RTEMS} \\
+\texttt{pthread\_setaffinity\_np} & Skipped & Single-core target; no affinity needed \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Threads.}
+The \texttt{rcl} and \texttt{rclcpp} libraries create internal threads for the DDS participant, the wait-set polling loop, and the executor.
+Under Linux these are \texttt{pthread} objects; under RTEMS we replace them with Classic API tasks created via \texttt{rtems\_task\_create()} and started via \texttt{rtems\_task\_start()}.
+This mapping preserves the ability to assign each task an independent RTEMS priority, which is essential for the RTExecutor design (Section~\ref{sec:design}).
+
+\textbf{Mutexes.}
+ROS~2 uses \texttt{pthread\_mutex} extensively to protect shared data structures such as the wait-set and callback groups.
+On RTEMS, we replace each mutex with a binary semaphore created with the \texttt{RTEMS\_INHERIT\_PRIORITY} attribute.
+This ensures that when a low-priority task holds a lock needed by a higher-priority task, the low-priority task's priority is temporarily elevated---a direct application of the priority inheritance protocol that prevents unbounded priority inversion at the OS level.
+
+\textbf{Condition variables.}
+RTEMS does not natively implement \texttt{pthread\_cond\_wait} / \texttt{pthread\_cond\_signal}.
+We emulate condition-variable semantics using a combination of RTEMS events and semaphores: the waiting task calls \texttt{rtems\_event\_receive()} with the \texttt{RTEMS\_WAIT} option, and the signaling task calls \texttt{rtems\_event\_send()} to wake it.
+A binary semaphore serializes access to the shared predicate state.
+This pattern closely mirrors the standard condvar protocol (lock--check--wait loop) and introduces minimal overhead.
+
+\textbf{Monotonic clock.}
+The \texttt{rcl} timer subsystem relies on \texttt{clock\_gettime(CLOCK\_MONOTONIC)} to compute timeouts and periods.
+RTEMS provides \texttt{rtems\_clock\_get\_ticks\_since\_boot()}, which returns a monotonically non-decreasing tick count.
+We wrap this call behind a thin compatibility function that converts ticks to nanoseconds using the configured tick rate, preserving the \texttt{rcl} timer API without modification.
+
+\textbf{GNU extensions.}
+The \texttt{on\_exit()} function is a GNU extension not provided by RTEMS.
+We replace it with an \texttt{atexit()}-based wrapper guarded by \texttt{\#ifdef RTEMS}.
+Similarly, \texttt{pthread\_setaffinity\_np()} is a Linux-specific call for setting CPU affinity.
+Since our target platform runs a single-core configuration, we skip this call entirely under the same guard.
+
+All adaptations are confined to a small set of header files and do not alter the public API of \texttt{rcl} or \texttt{rclcpp}, ensuring that application code remains source-compatible across Linux and RTEMS.
+
+\subsection{rclcpp Adapter Layer}
+\label{subsec:rclcpp_adapter}
+
+Above the POSIX compatibility layer, \texttt{rclcpp} uses C++ standard-library abstractions---\texttt{std::thread}, \texttt{std::mutex}, \texttt{std::condition\_variable}, and \texttt{std::chrono}---that must be mapped to RTEMS primitives.
+We implement an adapter layer that provides these mappings transparently.
+
+\textbf{Thread abstraction.}
+The \texttt{std::thread} constructor is intercepted so that the callable and its arguments are packaged into a structure and passed to \texttt{rtems\_task\_start()}.
+The resulting RTEMS task receives the caller's requested priority through a thread-local attribute stored before task creation.
+This allows the RTExecutor to create worker tasks with specific priorities directly from C++ code without exposing RTEMS-specific APIs to the application.
+
+\textbf{Mutex.}
+Each \texttt{std::mutex} object is backed by an RTEMS binary semaphore with the \texttt{RTEMS\_INHERIT\_PRIORITY} attribute.
+The \texttt{lock()} call invokes \texttt{rtems\_semaphore\_obtain()} with \texttt{RTEMS\_WAIT}, and \texttt{unlock()} invokes \texttt{rtems\_semaphore\_release()}.
+Because priority inheritance is enforced at the kernel level, any priority inversion between \texttt{rclcpp} threads is bounded automatically.
+
+\textbf{Condition variable.}
+\texttt{std::condition\_variable::wait()} is implemented by releasing the associated mutex semaphore, calling \texttt{rtems\_event\_receive()} on a per-condition-variable event set, and re-acquiring the mutex upon wake-up.
+\texttt{notify\_one()} and \texttt{notify\_all()} map to \texttt{rtems\_event\_send()} targeting one or all waiting tasks, respectively.
+Spurious wake-ups are handled by the standard predicate-loop idiom already present in \texttt{rclcpp}.
+
+\textbf{Time source.}
+\texttt{std::chrono::steady\_clock} is specialized for RTEMS by reading \texttt{rtems\_clock\_get\_ticks\_since\_boot()} and converting the result to a \texttt{time\_point} using the board's configured microseconds-per-tick constant.
+All \texttt{rclcpp} time queries---timer period computation, deadline tracking, and duration measurements---then operate correctly without any changes to higher-level code.
+
+\textbf{C++17 compatibility.}
+The RTEMS cross-compiler (\texttt{arm-rtems6-g++}) supports C++17 with \texttt{-std=c++17}, but some GNU extensions used by \texttt{rclcpp} (e.g., \texttt{\_\_attribute\_\_((cleanup))}, certain thread-local storage qualifiers) are either unavailable or behave differently in strict conformance mode.
+We resolve these through conditional compilation (\texttt{\#ifdef \_\_rtems\_\_}) and, where necessary, replace GNU-specific constructs with standard C++17 equivalents.
+For example, GNU-style statement expressions within macros are rewritten as inline template functions.
+
+\subsection{DDS and Communication Stack}
+\label{subsec:dds}
+
+The communication backbone of ROS~2 is the Data Distribution Service (DDS).
+We selected eProsima Fast-DDS as the DDS implementation because it is the default in ROS~2 and has a relatively clean CMake-based build system amenable to cross-compilation.
+
+\textbf{Fast-DDS porting.}
+Fast-DDS relies on POSIX networking APIs (\texttt{socket}, \texttt{bind}, \texttt{sendto}, \texttt{recvfrom}) for UDP multicast discovery and TCP data transport.
+The \texttt{realview\_pbx\_a9\_qemu} BSP provides a VirtIO network device with a standard BSD socket interface, which Fast-DDS uses without modification after adjusting the interface name detection logic (RTEMS uses \texttt{/dev/eth0} rather than Linux's \texttt{eth0}).
+Thread creation inside Fast-DDS is routed through the POSIX compatibility layer described in Section~\ref{subsec:posix}.
+
+\textbf{rmw\_fastrtps\_cpp.}
+The \texttt{rmw\_fastrtps\_cpp} package bridges the \texttt{rmw} abstraction with Fast-DDS.
+Under Linux, ROS~2 typically loads this package as a shared library at runtime via \texttt{dlopen()}.
+RTEMS does not support dynamic loading; therefore, \texttt{rmw\_fastrtps\_cpp} is statically linked into the final executable.
+The \texttt{rmw} initialization path is adjusted to call the Fast-DDS registration function directly rather than through the dynamic loader.
+
+\textbf{Intra-process zero-copy communication.}
+ROS~2's intra-process feature bypasses DDS entirely: when a publisher and a subscriber reside in the same process, data is transferred via \texttt{std::shared\_ptr} through a lock-free intra-process manager, avoiding serialization and network overhead.
+This mechanism works natively on RTEMS because it relies solely on shared memory within the same address space---a property that holds trivially on a single-process RTOS application.
+The intra-process path is particularly important for our design: it ensures that the RTExecutor's EventManager can deliver subscription data to worker tasks with minimal latency, without crossing a DDS boundary.
+
+\textbf{Message generation.}
+The \texttt{rosidl} pipeline generates C/C++ type-support code from \texttt{.msg} and \texttt{.srv} definitions.
+We cross-compile the generator tools for the host and run them natively, then cross-compile the generated sources for the RTEMS target.
+The generated type-support headers and Fast-DDS serialization code compile without modification once the POSIX and C++17 compatibility layers are in place.
+
+\subsection{Build and Deployment}
+\label{subsec:build}
+
+Building ROS~2 for RTEMS requires a cross-compilation toolchain and a build orchestrator capable of handling the 26-package dependency graph.
+
+\textbf{Cross-compilation toolchain.}
+The toolchain file configures CMake to use \texttt{arm-rtems6-gcc}/\texttt{arm-rtems6-g++} as the compiler and linker, with sysroot pointing to the RTEMS~6.1 installation directory containing the BSP headers and libraries.
+Compiler flags include \texttt{-mcpu=cortex-a9}, \texttt{-mfloat-abi=softfp}, and \texttt{-std=c++17}.
+Linker flags enforce static linking (\texttt{-static}) and include the RTEMS BSP library (\texttt{-lrtemsbsp}).
+
+\textbf{RTcolcon.}
+The standard ROS~2 build tool, \texttt{colcon}, depends on Python~3 and host-executable CMake packages that are not available in the cross-compilation environment.
+We developed RTcolcon, a custom build orchestrator that:
+(i) resolves the 26-package dependency graph;
+(ii) invokes CMake for each package with the cross-compilation toolchain file;
+(iii) parallelizes independent builds across available host cores;
+and (iv) installs headers and libraries to a staging directory consumed by downstream packages.
+RTcolcon produces a single merged \texttt{CMakeCache} that ensures all packages agree on the target architecture, compiler, and RTEMS version.
+
+\textbf{RTEMS system configuration.}
+RTEMS applications are configured at compile time through the \texttt{confdefs.h} mechanism.
+Key configuration parameters include:
+\begin{itemize}
+    \item \texttt{CONFIGURE\_UNLIMITED\_OBJECTS} --- allows the kernel to allocate tasks, semaphores, and other objects on demand rather than from a fixed pool;
+    \item \texttt{CONFIGURE\_POSIX\_API} --- enables the POSIX subset required by \texttt{rcl} and Fast-DDS;
+    \item \texttt{CONFIGURE\_MAXIMUM\_PROCESSORS} = 1 --- single-core configuration matching the QEMU target;
+    \item \texttt{CONFIGURE\_MICROSECONDS\_PER\_TICK} = 1000 --- 1~ms tick period for timer resolution;
+    \item \texttt{CONFIGURE\_INIT\_TASK\_ENTRY\_POINT} --- set to the ROS~2 application's \texttt{main()} function.
+\end{itemize}
+
+\textbf{Static linking and deployment.}
+All ROS~2 libraries, Fast-DDS, and the RTEMS BSP are statically linked into a single ELF executable (\texttt{.exe}).
+This executable is loaded by QEMU via the \texttt{-kernel} flag.
+No filesystem or dynamic loader is required at runtime, which eliminates shared-library versioning issues and reduces boot time.
+The resulting binary is self-contained: it initializes the RTEMS kernel, starts the network stack, and launches the ROS~2 application in a deterministic boot sequence.

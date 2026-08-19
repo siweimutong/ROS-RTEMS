@@ -1,0 +1,16 @@
+exp3inter_rosrt_n2  vmhwm_kb=175372  vmpeak_kb=723688
+exp3inter_rosrt_n2  vmhwm_kb=174888  vmpeak_kb=723688
+exp3inter_rosrt_n3  vmhwm_kb=175624  vmpeak_kb=723688
+exp3inter_rosrt_n3  vmhwm_kb=174768  vmpeak_kb=723688
+exp3inter_rosrt_n4  vmhwm_kb=175272  vmpeak_kb=723688
+exp3inter_rosrt_n4  vmhwm_kb=175660  vmpeak_kb=723688
+exp3inter_rosrt_n5  vmhwm_kb=176980  vmpeak_kb=723688
+exp3inter_rosrt_n5  vmhwm_kb=176824  vmpeak_kb=723688
+exp3inter_rosrt_n2  vmhwm_kb=175024  vmpeak_kb=723688
+exp3inter_rosrt_n3  vmhwm_kb=175572  vmpeak_kb=723688
+exp3inter_rosrt_n4  vmhwm_kb=175640  vmpeak_kb=723688
+exp3inter_rosrt_n5  vmhwm_kb=176608  vmpeak_kb=723688
+exp3inter_rosrt_n2  vmhwm_kb=175052  vmpeak_kb=723688
+exp3inter_rosrt_n3  vmhwm_kb=175472  vmpeak_kb=723688
+exp3inter_rosrt_n4  vmhwm_kb=175496  vmpeak_kb=723688
+exp3inter_rosrt_n5  vmhwm_kb=176852  vmpeak_kb=723688

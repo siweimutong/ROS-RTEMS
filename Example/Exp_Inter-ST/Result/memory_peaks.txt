@@ -1,0 +1,13 @@
+exp3inter_st_n2  vmhwm_kb=176272  vmpeak_kb=722096
+exp3inter_st_n2  vmhwm_kb=175596  vmpeak_kb=722096
+exp3inter_st_n3  vmhwm_kb=175936  vmpeak_kb=722096
+exp3inter_st_n2  vmhwm_kb=176084  vmpeak_kb=722096
+exp3inter_st_n4  vmhwm_kb=176304  vmpeak_kb=722096
+exp3inter_st_n3  vmhwm_kb=176200  vmpeak_kb=722096
+exp3inter_st_n5  vmhwm_kb=176176  vmpeak_kb=722096
+exp3inter_st_n4  vmhwm_kb=175648  vmpeak_kb=722096
+exp3inter_st_n5  vmhwm_kb=176376  vmpeak_kb=722096
+exp3inter_st_n2  vmhwm_kb=176552  vmpeak_kb=722096
+exp3inter_st_n3  vmhwm_kb=176392  vmpeak_kb=722096
+exp3inter_st_n4  vmhwm_kb=176508  vmpeak_kb=722096
+exp3inter_st_n5  vmhwm_kb=176184  vmpeak_kb=722096

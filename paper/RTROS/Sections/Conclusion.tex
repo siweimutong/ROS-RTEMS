@@ -1,0 +1,53 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+\subsection{Comparison with CallbackIsolatedExecutor}
+
+The CallbackIsolatedExecutor~\cite{ishikawa2025} represents the most closely related prior work, as it also adopts a one-to-one callback-to-thread mapping to eliminate nested scheduling. However, its reliance on the Linux kernel fundamentally limits the determinism and efficiency it can achieve. Table~\ref{tab:comparison} provides a detailed comparison between the CallbackIsolatedExecutor on Linux and our RTExecutor on RTEMS.
+
+\begin{table}[t]
+\centering
+\caption{Comparison between CallbackIsolatedExecutor on Linux and RTExecutor on RTEMS.}
+\label{tab:comparison}
+\begin{tabular}{p{1.6cm} p{2.8cm} p{2.8cm}}
+\toprule
+\textbf{Dimension} & \textbf{CallbackIsolatedExecutor (Linux)} & \textbf{RTExecutor (RTEMS)} \\
+\midrule
+OS Scheduler & SCHED\_FIFO / CFS (non-deterministic) & FP Preemption (deterministic) \\
+\midrule
+Interrupt Latency & Uncertain (Linux kernel) & Deterministic (RTEMS kernel) \\
+\midrule
+Callback--Thread Mapping & 1:1 (one pthread per callback) & 1:1 (one RTEMS task per callback) \\
+\midrule
+Hardware Timer & Unavailable & Available (\texttt{/dev/rtss\_timer}) \\
+\midrule
+Response Time Analysis & Must consider Linux scheduler behavior & Classic FP scheduling directly applicable \\
+\midrule
+Intra-process Overhead & $\sim$5$\times$ (vs.\ SingleThreadedExecutor) & $\sim$1$\times$ (no extra user--kernel switch) \\
+\midrule
+Timer Jitter & 10--50\,ms & $\leq$2\,ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key distinctions are threefold. First, the RTEMS fixed-priority preemptive scheduler provides deterministic scheduling decisions and bounded interrupt latency, whereas the Linux kernel---even with SCHED\_FIFO---can introduce non-deterministic preemption delays due to kernel activities, interrupt handling, and CFS interactions. Second, by eliminating the user--kernel mode switching overhead inherent in Linux pthread creation and management, the RTExecutor achieves intra-process dispatch overhead comparable to the default SingleThreadedExecutor, approximately five times lower than the CallbackIsolatedExecutor on Linux. Third, the availability of a hardware-backed timer device (\texttt{/dev/rtss\_timer}) on our RTEMS platform enables timer callback jitter of at most 2\,ms, an order of magnitude improvement over the 10--50\,ms jitter observed on Linux.
+
+\subsection{Applicable Scenarios and Limitations}
+
+The proposed approach is applicable to safety-critical real-time systems that require deterministic callback execution, including aerospace control systems, industrial automation, and autonomous driving subsystems. The use of RTEMS as the underlying OS further enables certification pathways (e.g., DO-178C, IEC~61508) that are not attainable with Linux-based solutions.
+
+However, the current work has several limitations that we acknowledge:
+
+\begin{enumerate}
+    \item \textbf{Single-core ARM platform.} The current implementation targets a single-core ARM processor. Extension to multi-core platforms requires further investigation into RTEMS SMP scheduling and inter-core coordination.
+    \item \textbf{Cross-process DDS communication.} Full adaptation of cross-process DDS communication has not yet been completed, as it requires the libBSD network stack to be integrated and configured on the RTEMS platform. Intra-process communication within a single ROS~2 node process is fully functional.
+    \item \textbf{ROS~2 ecosystem compatibility.} A subset of the ROS~2 ecosystem relies on Linux-specific APIs (e.g., certain file system operations, process management facilities). Packages with such dependencies require targeted adaptation to function on RTEMS.
+\end{enumerate}
+
+\subsection{Future Work: Multi-Core Extension}
+
+The most important direction for future work is extending the RTExecutor to multi-core platforms. RTEMS provides symmetric multiprocessing (SMP) support, which offers a natural foundation for this extension.
+
+In the envisioned multi-core architecture, each core would host an independent EventManager Worker task that processes a subset of the registered callbacks. Core affinity configuration would allow system designers to bind specific callbacks to designated cores, ensuring cache locality and isolation between critical and non-critical workloads. Cross-core load balancing strategies---such as work-stealing or priority-based migration---would need to be carefully designed to maintain the deterministic guarantees that are the hallmark of the single-core design.
+
+Furthermore, we plan to extend the port to additional RTEMS Board Support Packages (BSPs), including the Xilinx Zynq and NXP i.MX families, which are widely used in embedded real-time systems. These extensions would broaden the applicability of our approach to a larger class of hardware platforms and use cases.
