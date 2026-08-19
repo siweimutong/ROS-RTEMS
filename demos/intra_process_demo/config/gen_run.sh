@@ -8,7 +8,7 @@ if [ -d "${target_dir}" ]; then
     rm -rf "${target_dir}"
     echo "tmp directory in current directory existed; successfully deleted"
 else
-    echo "当前directory下not foundtmpdirectory,noneneedDelete"
+    echo "No tmp directory found in the current directory; nothing to delete"
 fi
 
 mkdir tmp
@@ -58,7 +58,7 @@ def init(ctx):
     ctx.load("compiler_cxx")  # Ensure C++ compiler is loaded
 
 def bsp_configure(conf, arch_bsp):
-    # 这里can以进Row BSP 相关的ConfigurationCheck
+    # BSP-specific configuration checks can be added here
     pass
 
 def options(opt):

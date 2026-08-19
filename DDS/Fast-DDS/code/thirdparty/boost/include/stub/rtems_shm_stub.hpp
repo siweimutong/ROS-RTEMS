@@ -1,14 +1,14 @@
-// rtems_shm_stub.hpp —— RTEMS 共享内存接口桩函数
+// rtems_shm_stub.hpp —— RTEMS shared memory interface stub functions
 #ifndef RTEMS_SHM_STUB_HPP
 #define RTEMS_SHM_STUB_HPP
 
-// 2. 为 RTEMS 打桩：空实现 shm_open（返回无效句柄 -1）
+// 2. Stub for RTEMS: empty shm_open implementation (returns invalid handle -1)
 extern "C" int shm_open(const char* name, int oflag, mode_t mode);
 
-// 3. 配套桩函数：shm_unlink（空实现，返回 0 表示成功）
+// 3. Companion stub: shm_unlink (empty implementation, returns 0 for success)
 extern "C" int shm_unlink(const char* name);
 
-// 4. 若 Boost 还用到 mmap/munmap，补充桩函数（按需）
+// 4. If Boost also uses mmap/munmap, add stubs as needed
 #ifdef __cplusplus
 extern "C" {
 #endif

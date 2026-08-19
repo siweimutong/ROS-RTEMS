@@ -12,7 +12,7 @@ if [[ ! -d "$log_path" ]]; then
     mkdir -p "$log_path"  # -pis key: creates build even if no subdirectories exist under root_path
 fi
 
-# Checkfile是nonot found,not found则Create
+# Check whether the file exists; create it if not found
 if [[ ! -f "$log_file_path" ]]; then
     touch "$log_file_path"  # Create empty file (if directory exists)
 fi
@@ -45,12 +45,12 @@ if [[ "$flag" == 1 ]]; then
     if eval $GIT_CMD; then
         echo "✅ Submodule rtems_waf added successfully!" >> $log_file_path 2>&1
     else
-        # CaptureFailed,OutputErrorinfo并退出
+        # Capture the failure, print the error info, and exit
         ERROR_CODE=$?  # Get command exit code
         echo "❌ Submodule rtems_waf add failed! Exit code: ${ERROR_CODE}" >> $log_file_path 2>&1
-        echo "❌ Failed原becausecan能:网络问题/仓库not found/pathalready存在/权限不足" >> $log_file_path 2>&1
+        echo "❌ Failed, possibly due to: network issues / repository not found / path already exists / insufficient permissions" >> $log_file_path 2>&1
         
-        # Optional:Output详细Error日志(Help diagnose issues)
+        # Optional: print the detailed error log (helps diagnose issues)
         echo "📝 Detailed error log: " >> $log_file_path 2>&1
         $GIT_CMD 2>&1  # Re-execute and output full error info (2>&1 redirects stderr to stdout)
         
@@ -98,7 +98,7 @@ def init(ctx):
     ctx.load("compiler_cxx")  # Ensure C++ compiler is loaded
 
 def bsp_configure(conf, arch_bsp):
-    # 这里can以进Row BSP 相关的ConfigurationCheck
+    # BSP-related configuration checks can be added here
     pass
 
 def options(opt):

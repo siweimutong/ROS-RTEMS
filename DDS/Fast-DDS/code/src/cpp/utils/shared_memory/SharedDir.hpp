@@ -45,7 +45,8 @@ public:
 #else
         // Default value from: glibc-2.29/sysdeps/unix/sysv/linux/shm-directory.c
         /*
-         *  /dev/shm Ŀ¼���豸�ļ������� new1 ����������֧���ļ��������ת���� /var Ŀ¼��
+         *  The /dev/shm directory (a device-file directory) may not support regular files;
+         *  if so, fall back to the /var directory.
          */
 #ifdef SYLIXOS
         static const char defaultdir[] = "/var/";

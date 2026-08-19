@@ -1,17 +1,18 @@
 /**
  * @file timer_manager.cpp
  *
- * RTEMS 6.1 ARM 内核定时器中断驱动 ROS2 应用
+ * RTEMS 6.1 ARM kernel timer interrupt-driven ROS2 application
  *
- * 核心：rtems_timer_server_fire_after 由内核 tick ISR 的 Watchdog 触发，
- * Timer Server 任务设为最高优先级 (1)，可抢占所有低优先级任务。
+ * Core: rtems_timer_server_fire_after is triggered by the watchdog of the
+ * kernel tick ISR, and the Timer Server task runs at the highest priority (1),
+ * preempting all lower-priority tasks.
  *
- * 每个 Timer 回调记录：
- *   - 理论释放时间 = 起始 tick + 周期 × 触发次数
- *   - 实际执行时间 = rtems_clock_get_ticks_since_boot()
- *   - 抖动 = 实际 - 理论
+ * Each timer callback records:
+ *   - Theoretical release time = start tick + period x fire count
+ *   - Actual execution time = rtems_clock_get_ticks_since_boot()
+ *   - Jitter = actual - theoretical
  *
- * 同时运行低优先级忙等任务，演示抢占效果。
+ * A low-priority busy-wait task also runs to demonstrate preemption.
  */
 
 #include <rclcpp/rclcpp.hpp>
@@ -38,7 +39,7 @@ static rtems_interval ms_to_ticks(uint32_t ms)
     return (rtems_interval)((uint64_t)ms * tps / 1000);
 }
 
-/* ---- 基于 RTEMS 信号量的任务安全队列 ---- */
+/* ---- RTEMS semaphore-based thread-safe task queue ---- */
 
 class RtsemQueue {
 public:
@@ -86,17 +87,17 @@ private:
     std::vector<Task>  queue_;
 };
 
-/* ---- 基于 RTEMS 内核定时器的定时器管理器 ---- */
+/* ---- RTEMS kernel timer-based timer manager ---- */
 
 #define TIMER_MAX_CHANNELS 8
 
-/* 定时器触发记录 */
+/* Timer trigger record */
 struct TriggerRecord {
     int            channel;
-    uint32_t       fire_count;       /* 第几次触发 */
-    rtems_interval theoretical_tick; /* 理论释放 tick */
-    rtems_interval actual_tick;      /* 实际执行 tick */
-    int32_t        jitter_ticks;     /* 抖动 (actual - theoretical) */
+    uint32_t       fire_count;       /* Which trigger number this is */
+    rtems_interval theoretical_tick; /* Theoretical release tick */
+    rtems_interval actual_tick;      /* Actual execution tick */
+    int32_t        jitter_ticks;     /* Jitter (actual - theoretical) */
 };
 
 class TimeManager {
@@ -112,7 +113,7 @@ public:
     int register_timer(std::function<void()> callback, uint32_t period_ms)
     {
         if (next_channel_ >= TIMER_MAX_CHANNELS) {
-            std::cerr << "[TimeManager] 通道数已达上限" << std::endl;
+            std::cerr << "[TimeManager] Channel limit reached" << std::endl;
             return -1;
         }
 
@@ -135,32 +136,32 @@ public:
 
         sc = ready_queue_.init('R', 'D');
         if (sc != RTEMS_SUCCESSFUL && sc != RTEMS_INCORRECT_STATE) {
-            std::cerr << "[TimeManager] 队列初始化失败: "
+            std::cerr << "[TimeManager] Queue initialization failed: "
                       << rtems_status_text(sc) << std::endl;
             return;
         }
 
-        /* 启动 Timer Server，优先级设为 1（最高）以抢占所有低优先级任务 */
+        /* Start the Timer Server at priority 1 (highest) to preempt all lower-priority tasks */
         sc = rtems_timer_initiate_server(
-            1,  /* 最高优先级 */
+            1,  /* Highest priority */
             RTEMS_MINIMUM_STACK_SIZE * 2,
             RTEMS_DEFAULT_ATTRIBUTES);
         if (sc != RTEMS_SUCCESSFUL && sc != RTEMS_INCORRECT_STATE) {
-            std::cerr << "[TimeManager] Timer Server 启动失败: "
+            std::cerr << "[TimeManager] Timer Server start failed: "
                       << rtems_status_text(sc) << std::endl;
             return;
         }
-        printf("[TimeManager] Timer Server 已启动，优先级=1 (最高)\n");
+        printf("[TimeManager] Timer Server started, priority=1 (highest)\n");
 
         start_tick_ = rtems_clock_get_ticks_since_boot();
 
-        /* 为每个通道创建内核定时器并启动 */
+        /* Create and start a kernel timer for each channel */
         for (auto &info : timers_) {
             rtems_name tname = rtems_build_name('T', 'M', '0' + info->channel, ' ');
             sc = rtems_timer_create(tname, &info->timer_id);
             if (sc != RTEMS_SUCCESSFUL) {
-                std::cerr << "[TimeManager] 创建定时器通道 "
-                          << info->channel << " 失败: "
+                std::cerr << "[TimeManager] Failed to create timer channel "
+                          << info->channel << " failed: "
                           << rtems_status_text(sc) << std::endl;
                 continue;
             }
@@ -171,14 +172,14 @@ public:
                 timer_isr_callback,
                 info.get());
             if (sc != RTEMS_SUCCESSFUL) {
-                std::cerr << "[TimeManager] 启动通道 "
-                          << info->channel << " 失败: "
+                std::cerr << "[TimeManager] Failed to start channel "
+                          << info->channel << " failed: "
                           << rtems_status_text(sc) << std::endl;
                 continue;
             }
 
-            printf("[TimeManager] 通道 %d 已启动，周期=%ums (%u ticks)，"
-                   "理论首次释放=%u\n",
+            printf("[TimeManager] Channel %d started, period=%ums (%u ticks), "
+                   "first theoretical release=%u\n",
                    info->channel, info->period_ms, info->period_ticks,
                    (unsigned)(start_tick_ + info->period_ticks));
         }
@@ -186,7 +187,7 @@ public:
         instance_ = this;
         running_ = true;
 
-        /* worker 任务：优先级 5，高优先级执行回调 */
+        /* Worker task: priority 5, executes callbacks at high priority */
         sc = rtems_task_create(
             rtems_build_name('W', 'O', 'R', 'K'),
             5,
@@ -195,22 +196,22 @@ public:
             RTEMS_DEFAULT_ATTRIBUTES,
             &worker_task_id_);
         if (sc != RTEMS_SUCCESSFUL) {
-            std::cerr << "[TimeManager] 创建 worker 任务失败" << std::endl;
+            std::cerr << "[TimeManager] Failed to create worker task" << std::endl;
             return;
         }
         rtems_task_start(worker_task_id_, worker_entry, (rtems_task_argument)this);
 
-        /* 低优先级忙等任务：演示抢占 */
+        /* Low-priority busy-wait task: demonstrates preemption */
         sc = rtems_task_create(
             rtems_build_name('B', 'U', 'S', 'Y'),
-            200,  /* 低优先级 */
+            200,  /* Low priority */
             RTEMS_MINIMUM_STACK_SIZE * 2,
             RTEMS_DEFAULT_MODES,
             RTEMS_DEFAULT_ATTRIBUTES,
             &busy_task_id_);
         if (sc == RTEMS_SUCCESSFUL) {
             rtems_task_start(busy_task_id_, busy_task_entry, 0);
-            printf("[TimeManager] 低优先级忙等任务已启动 (prio=200)，可被定时器抢占\n");
+            printf("[TimeManager] Low-priority busy-wait task started (prio=200), can be preempted by timers\n");
         }
     }
 
@@ -250,7 +251,7 @@ private:
         volatile uint32_t      fire_count;
     };
 
-    /* ---- 内核定时器回调：Timer Server 任务上下文 (prio=1) ---- */
+    /* ---- Kernel timer callback: Timer Server task context (prio=1) ---- */
 
     static void timer_isr_callback(rtems_id timer_id, void *arg)
     {
@@ -264,7 +265,7 @@ private:
         rtems_interval theory  = instance_->start_tick_ + count * info->period_ticks;
         int32_t        jitter  = (int32_t)(actual - theory);
 
-        /* 封装触发记录 + 回调，推入就绪队列 */
+        /* Wrap the trigger record and callback, push into the ready queue */
         TriggerRecord rec;
         rec.channel         = info->channel;
         rec.fire_count      = count;
@@ -275,11 +276,11 @@ private:
         TimeManager *self = get_instance();
         if (self) {
             self->ready_queue_.push([info, rec]() {
-                /* 打印抢占信息和时序分析 */
+                /* Print preemption info and timing analysis */
                 rtems_task_priority prio;
                 rtems_task_set_priority(RTEMS_SELF, RTEMS_CURRENT_PRIORITY, &prio);
-                printf("[Ch%d] #%u | 理论释放=%u 实际执行=%u 抖动=%d tick | "
-                       "执行优先级=%u (被高优先级抢占调度)\n",
+                printf("[Ch%d] #%u | theoretical release=%u actual execution=%u jitter=%d tick | "
+                       "execution priority=%u (scheduled under high-priority preemption)\n",
                        rec.channel, rec.fire_count,
                        (unsigned)rec.theoretical_tick,
                        (unsigned)rec.actual_tick,
@@ -290,12 +291,12 @@ private:
             rtems_event_send(self->worker_task_id_, RTEMS_EVENT_1);
         }
 
-        /* 重新装填定时器 */
+        /* Re-arm the timer */
         rtems_timer_server_fire_after(
             timer_id, info->period_ticks, timer_isr_callback, arg);
     }
 
-    /* ---- worker 任务：优先级 5 ---- */
+    /* ---- Worker task: priority 5 ---- */
 
     static rtems_task worker_entry(rtems_task_argument arg)
     {
@@ -324,7 +325,7 @@ private:
         }
     }
 
-    /* ---- 低优先级忙等任务：演示抢占 ---- */
+    /* ---- Low-priority busy-wait task: demonstrates preemption ---- */
 
     static rtems_task busy_task_entry(rtems_task_argument arg)
     {
@@ -332,7 +333,7 @@ private:
         volatile uint32_t counter = 0;
         rtems_event_set events;
 
-        printf("[BUSY] 低优先级任务运行中 (prio=200)，等待被抢占...\n");
+        printf("[BUSY] Low-priority task running (prio=200), waiting to be preempted...\n");
 
         while (true) {
             rtems_status_code sc = rtems_event_receive(
@@ -342,9 +343,9 @@ private:
             if (sc == RTEMS_SUCCESSFUL) break;
 
             counter++;
-            /* 每约 5 秒打印一次 */
+            /* Print roughly every 5 seconds */
             if ((counter % 5000000) == 0) {
-                printf("[BUSY] 计数=%u, ticks=%u (低优先级仍在跑)\n",
+                printf("[BUSY] count=%u, ticks=%u (low priority still running)\n",
                        counter,
                        (unsigned)rtems_clock_get_ticks_since_boot());
             }
@@ -366,7 +367,7 @@ private:
 
 TimeManager *TimeManager::instance_ = nullptr;
 
-/* ---- 定时器生产者节点 ---- */
+/* ---- Timer producer node ---- */
 
 struct TimerProducer : public rclcpp::Node
 {
@@ -378,7 +379,7 @@ struct TimerProducer : public rclcpp::Node
 
         tm_ = std::make_unique<TimeManager>();
 
-        /* 通道 0：500ms 周期，高优先级内核定时器 */
+        /* Channel 0: 500ms period, high-priority kernel timer */
         tm_->register_timer(
             [this, captured_pub]() {
                 auto pub_ptr = captured_pub.lock();
@@ -389,7 +390,7 @@ struct TimerProducer : public rclcpp::Node
                 pub_ptr->publish(std::move(msg));
             }, 500);
 
-        /* 通道 1：1000ms 周期，高优先级内核定时器 */
+        /* Channel 1: 1000ms period, high-priority kernel timer */
         tm_->register_timer(
             [this, captured_pub]() {
                 auto pub_ptr = captured_pub.lock();
@@ -400,7 +401,7 @@ struct TimerProducer : public rclcpp::Node
                 pub_ptr->publish(std::move(msg));
             }, 1000);
 
-        /* 通道 2：200ms 周期，更高频率演示抢占 */
+        /* Channel 2: 200ms period, higher frequency to demonstrate preemption */
         tm_->register_timer(
             [this, captured_pub]() {
                 auto pub_ptr = captured_pub.lock();
@@ -423,7 +424,7 @@ struct TimerProducer : public rclcpp::Node
     std::unique_ptr<TimeManager> tm_;
 };
 
-/* ---- 定时器消费者节点 ---- */
+/* ---- Timer consumer node ---- */
 
 struct TimerConsumer : public rclcpp::Node
 {
@@ -434,7 +435,7 @@ struct TimerConsumer : public rclcpp::Node
             input,
             10,
             [](std_msgs::msg::Int32::UniquePtr msg) {
-                printf("  [消费者] value=%d, addr=0x%" PRIXPTR "\n",
+                printf("  [Consumer] value=%d, addr=0x%" PRIXPTR "\n",
                        msg->data, reinterpret_cast<std::uintptr_t>(msg.get()));
             });
     }
@@ -442,7 +443,7 @@ struct TimerConsumer : public rclcpp::Node
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_;
 };
 
-/* ---- 入口函数 ---- */
+/* ---- Entry function ---- */
 
 int main(int argc, char * argv[])
 {
@@ -452,12 +453,12 @@ int main(int argc, char * argv[])
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
     rclcpp::init(argc, argv);
 
-    printf("=== RTEMS 内核定时器抢占调度示例 ===\n");
-    printf("调度策略：优先级抢占 (RTEMS DEFAULT_MODES)\n");
-    printf("  Timer Server  prio=1   (最高，内核 tick ISR 驱动)\n");
-    printf("  Worker 任务   prio=5   (高优先级执行回调)\n");
-    printf("  ROS2 Executor prio=50  (中等)\n");
-    printf("  Busy 任务     prio=200 (最低，被抢占)\n");
+    printf("=== RTEMS kernel timer preemptive scheduling demo ===\n");
+    printf("Scheduling policy: priority preemption (RTEMS DEFAULT_MODES)\n");
+    printf("  Timer Server  prio=1   (highest, driven by kernel tick ISR)\n");
+    printf("  Worker task   prio=5   (executes callbacks at high priority)\n");
+    printf("  ROS2 Executor prio=50  (medium)\n");
+    printf("  Busy task     prio=200 (lowest, preempted)\n");
     printf("====================================\n");
 
     auto producer = std::make_shared<TimerProducer>("timer_producer", "timer_events");

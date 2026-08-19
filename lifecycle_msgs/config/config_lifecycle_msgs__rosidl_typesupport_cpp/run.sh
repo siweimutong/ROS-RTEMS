@@ -13,7 +13,7 @@ if [[ ! -d "$log_path" ]]; then
     mkdir -p "$log_path"  # -pis key: creates build even if no subdirectories exist under root_path
 fi
 
-# Checkfile是nonot found,not found则Create
+# Check if the file exists; create it if not found
 if [[ ! -f "$log_file_path" ]]; then
     touch "$log_file_path"  # Create empty file (if directory exists)
 fi
@@ -30,7 +30,7 @@ target_file="${target_dir}/$(basename ${source_file})"
 
 # 2. Check if target file exists; delete if present
 if [ -f "${target_file}" ]; then
-    rm -f "${target_file}"  # -f Force delete,避免not found时报错
+    rm -f "${target_file}"  # -f force delete, avoid errors when the file is not found
     echo "Deleted existing target file: ${target_file}" >> $log_file_path 2>&1
 fi
 

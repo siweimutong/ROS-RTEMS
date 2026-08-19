@@ -25,10 +25,10 @@ def parse_sylixos_mk(mk_file):
         'cxxflags': [],          # C++ compile flags
         'ldflags': [],           # Link flags
         'libs': [],              # Dependency libraries
-        'lib_paths': [],         # 库Search paths
+        'lib_paths': [],         # Library search paths
         'depend_targets': [],    # Dependency targets
-        'use_cxx': False,        # 是no使用C++
-        'use_exceptions': False, # 是no启用异常
+        'use_cxx': False,        # Whether to use C++
+        'use_exceptions': False, # Whether to enable exceptions
         'pre_link_cmd': None,    # Pre-link command
         'post_link_cmd': None    # Post-link command
     }
@@ -65,7 +65,7 @@ def parse_sylixos_mk(mk_file):
                     if item.startswith('-D')]
         
         elif var_name == 'local_depend_lib':
-            # ProcessDependency libraries (-l 开头)
+            # Process dependency libraries (starting with -l)
             return [item[2:] for item in re.split(r'(?<!\\)\s+', value_str) 
                     if item.startswith('-l')]
         
@@ -81,7 +81,7 @@ def parse_sylixos_mk(mk_file):
             return paths
         
         elif var_name == 'local_depend_target':
-            # ProcessDependency targets (Strippath和扩展名)
+            # Process dependency targets (strip path and extension)
             return [os.path.basename(item).split('.')[0].replace('lib', '') 
                    for item in re.split(r'(?<!\\)\s+', value_str) if item.strip()]
         
@@ -113,7 +113,7 @@ def parse_sylixos_mk(mk_file):
         for line in f:
             line = line.strip()
             
-            # Skipping注释和空Row
+            # Skip comments and empty lines
             if not line or line.startswith('#') or line.startswith('//'):
                 if flag == 1:
                     collecting_value = False
@@ -121,7 +121,7 @@ def parse_sylixos_mk(mk_file):
             
             # Check if this is a variable definition line
             if ':=' in line and not collecting_value:
-                # Start新的变量Define
+                # Start a new variable definition
                 var_part, value_part = line.split(':=', 1)
                 value_part = value_part.strip()
                 
@@ -178,7 +178,7 @@ def parse_sylixos_mk(mk_file):
                     # config[current_var] = process_value(full_value, current_var)
                     value_lines = []
             
-            # ProcessSpecial变量
+            # Process special variables
             if line.startswith('LOCAL_USE_CXX :='):
                 config['use_cxx'] = 'yes' in line.lower()
             elif line.startswith('LOCAL_USE_CXX_EXCEPT :='):
@@ -225,7 +225,7 @@ def generate_rtems_wscript(config, output_file):
         "    ctx.load('compiler_cxx')  # Ensure C++ compiler is loaded",
         "",
         "def bsp_configure(conf, arch_bsp):",
-        "    # 这里can以进Row BSP 相关的ConfigurationCheck",
+        "    # BSP-related configuration checks can be added here",
         "    pass",
         "",
         "def options(opt):",
@@ -272,7 +272,7 @@ def generate_rtems_wscript(config, output_file):
             if config['sources']:
                 lines.append(f"        source={config['sources']},")
             
-            # Add包含path
+            # Add include paths
             if config['includes']:
                 lines.append(f"        includes={config['includes']},")
             
@@ -293,7 +293,7 @@ def generate_rtems_wscript(config, output_file):
             ldflags = list(set(config['ldflags'] + ['-static']))
             lines.append(f"        linkflags='{' '.join(ldflags)}',")
             
-            # AddDependency libraries(移except.so后缀)
+            # Add dependency libraries (with .so suffix removed)
             all_libs = [lib.replace('.so', '') for lib in config['libs']] + ['stdc++', 'rtemscpu', 'rtemsbsp', 'rtemsdefaultconfig', 'm', 'gcc', 'c']
             lines.append(f"        lib={all_libs},")
             
@@ -353,17 +353,17 @@ def replace_src_with_source(file_path):
         else:
             new_lines.append(line)
     
-    # 若有修改则Writefile
+    # Write the file if content was modified
     if modified:
         # Backup original file (optional, prevents replacement errors)
         # backup_path = f"{file_path}.bak"
         # os.rename(file_path, backup_path)
-        # print(f"already备份原file至:{backup_path}")
+        # print(f"Backed up the original file to: {backup_path}")
         
         # Write replaced content
         with open(file_path, 'w', encoding='utf-8') as f:
             f.writelines(new_lines)
-        # print(f"Replacedone！already将file {file_path} 中source/includesRow的'src'Replace为'source'")
+        # print(f"Done! Replaced 'src' with 'source' in the source/includes lines of file {file_path}")
     else:
         print("No 'src' content to replace found, file unchanged")
 

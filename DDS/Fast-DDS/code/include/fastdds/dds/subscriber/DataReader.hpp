@@ -152,7 +152,7 @@ public:
      * of the returned collection with the @c max_samples parameter.
      *
      * The properties of the @c data_values collection and the setting of the @ref PresentationQosPolicy may
-     * impose further limits on the size of the returned 鈥榣ist.鈥�
+     * impose further limits on the size of the returned 'list.'
      *
      * 1. If @ref PresentationQosPolicy::access_scope is @ref INSTANCE_PRESENTATION_QOS, then the returned
      *    collection is a 'list' where samples belonging to the same data-instance are consecutive.
@@ -313,14 +313,14 @@ public:
     /**
      * NOT YET IMPLEMENTED
      *
-     * This operation accesses via 鈥榬ead鈥� the samples that match the criteria specified in the ReadCondition.
+     * This operation accesses via 'read' the samples that match the criteria specified in the ReadCondition.
      * This operation is especially useful in combination with QueryCondition to filter data samples based on the
      * content.
      *
      * The specified ReadCondition must be attached to the DataReader; otherwise the operation will fail and return
      * RETCODE_PRECONDITION_NOT_MET.
      *
-     * In case the ReadCondition is a 鈥榩lain鈥� ReadCondition and not the specialized QueryCondition, the
+     * In case the ReadCondition is a 'plain' ReadCondition and not the specialized QueryCondition, the
      * operation is equivalent to calling read and passing as @c sample_states, @c view_states and @c instance_states
      * the value of the corresponding attributes in @c a_condition. Using this operation the application can avoid
      * repeating the same parameters specified when creating the ReadCondition.
@@ -455,7 +455,7 @@ public:
      * This operation accesses a collection of Data values from the DataReader. The behavior is identical to
      * @ref read_next_instance except that all samples returned satisfy the specified condition. In other words, on
      * success all returned samples belong to the same instance, and the instance is the instance with
-     * 鈥榮mallest鈥� @c instance_handle among the ones that verify (a) @c instance_handle >= @c previous_handle and (b) have samples
+     * 'smallest' @c instance_handle among the ones that verify (a) @c instance_handle >= @c previous_handle and (b) have samples
      * for which the specified ReadCondition evaluates to TRUE.
      *
      * Similar to the operation @ref read_next_instance it is possible to call
@@ -464,7 +464,7 @@ public:
      *
      * The behavior of the @ref read_next_instance_w_condition operation follows the same rules than the read operation
      * regarding the pre-conditions and post-conditions for the @c data_values and @c sample_infos collections. Similar
-     * to read, the @ref read_next_instance_w_condition operation may 鈥榣oan鈥� elements to the output collections which
+     * to read, the @ref read_next_instance_w_condition operation may 'loan' elements to the output collections which
      * must then be returned by means of @ref return_loan.
      *
      * If the DataReader has no samples that meet the constraints, the return value will be RETCODE_NO_DATA.
@@ -496,7 +496,7 @@ public:
      * has <tt> max_length = 1 </tt>, the <tt> sample_states = NOT_READ_SAMPLE_STATE </tt>,
      * the <tt> view_states = ANY_VIEW_STATE </tt>, and the <tt> instance_states = ANY_INSTANCE_STATE </tt>.
      *
-     * The read_next_sample operation provides a simplified API to 鈥榬ead鈥� samples avoiding the need for the
+     * The read_next_sample operation provides a simplified API to 'read' samples avoiding the need for the
      * application to manage sequences and specify states.
      *
      * If there is no unread data in the DataReader, the operation will return RETCODE_NO_DATA and nothing is copied
@@ -552,7 +552,7 @@ public:
     /**
      * NOT YET IMPLEMENTED
      *
-     * This operation is analogous to @ref read_w_condition except it accesses samples via the 鈥榯ake鈥� operation.
+     * This operation is analogous to @ref read_w_condition except it accesses samples via the 'take' operation.
      *
      * The specified ReadCondition must be attached to the DataReader; otherwise the operation will fail and return
      * RETCODE_PRECONDITION_NOT_MET.
@@ -659,7 +659,7 @@ public:
      *
      * This operation accesses a collection of Data values from the DataReader. The behavior is identical to
      * @ref read_next_instance except that all samples returned satisfy the specified condition. In other words, on
-     * success all returned samples belong to the same instance, and the instance is the instance with 鈥榮mallest鈥�
+     * success all returned samples belong to the same instance, and the instance is the instance with 'smallest'
      * @c instance_handle among the ones that verify (a) @c instance_handle >= @c previous_handle and (b) have
      * samples for which the specified ReadCondition evaluates to TRUE.
      *
@@ -668,7 +668,7 @@ public:
      *
      * The behavior of the @ref read_next_instance_w_condition operation follows the same rules than the read operation
      * regarding the pre-conditions and post-conditions for the @c data_values and @c sample_infos collections. Similar
-     * to read, the @ref read_next_instance_w_condition operation may 鈥榣oan鈥� elements to the output collections which
+     * to read, the @ref read_next_instance_w_condition operation may 'loan' elements to the output collections which
      * must then be returned by means of @ref return_loan.
      *
      * If the DataReader has no samples that meet the constraints, the return value will be RETCODE_NO_DATA
@@ -692,17 +692,17 @@ public:
             ReadCondition* a_condition = nullptr);
 
     /**
-     * @brief This operation copies the next, non-previously accessed Data value from the DataReader and 鈥榬emoves鈥� it
+     * @brief This operation copies the next, non-previously accessed Data value from the DataReader and 'removes' it
      * from the DataReader so it is no longer accessible. The operation also copies the corresponding SampleInfo.
      *
-     * This operation is analogous to @ref read_next_sample except for the fact that the sample is 鈥榬emoved鈥� from the
+     * This operation is analogous to @ref read_next_sample except for the fact that the sample is 'removed' from the
      * DataReader.
      *
      * This operation is semantically equivalent to the @ref take operation where the input sequence has
      * <tt> max_length = 1 </tt>, the <tt> sample_states = NOT_READ_SAMPLE_STATE </tt>, the
      * <tt> view_states = ANY_VIEW_STATE </tt>, and the <tt> instance_states = ANY_INSTANCE_STATE </tt>.
      *
-     * This operation provides a simplified API to 鈥檛ake鈥� samples avoiding the need for the application to manage
+     * This operation provides a simplified API to 'take' samples avoiding the need for the application to manage
      * sequences and specify states.
      *
      * If there is no unread data in the DataReader, the operation will return RETCODE_NO_DATA and nothing is copied.
@@ -723,7 +723,7 @@ public:
      * @c data_values and @c sample_infos obtained by some earlier invocation of @ref read or @ref take on the
      * DataReader.
      *
-     * The @c data_values and @c sample_infos must belong to a single related 鈥榩air鈥�; that is, they should correspond
+     * The @c data_values and @c sample_infos must belong to a single related 'pair'; that is, they should correspond
      * to a pair returned from a single call to read or take. The @c data_values and @c sample_infos must also have
      * been obtained from the same DataReader to which they are returned. If either of these conditions is not met,
      * the operation will fail and return RETCODE_PRECONDITION_NOT_MET.
@@ -1023,7 +1023,7 @@ public:
     RTPS_DllAPI const Subscriber* get_subscriber() const;
 
     /**
-     * This operation deletes all the entities that were created by means of the 鈥渃reate鈥� operations on the DataReader.
+     * This operation deletes all the entities that were created by means of the 'create' operations on the DataReader.
      * That is, it deletes all contained ReadCondition and QueryCondition objects.
      *
      * The operation will return PRECONDITION_NOT_MET if the any of the contained entities is in a state where it cannot

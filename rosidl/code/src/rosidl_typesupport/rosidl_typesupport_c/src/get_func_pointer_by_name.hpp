@@ -2,8 +2,8 @@
 #define GET_FUNC_POINTER_BY_NAME_HPP
 
 /**
-    这一层是针对ros底层自带的使用dlopen打开动态库，但是有时候需要基于静态库操作，然而静态库并不能使用dlopen加载到共享内存上，所以需要添加这一层的结构，
-    用于通过func的name获取func的调用点，这个类的构建需要使用到单例模式
+    This layer targets ROS's underlying use of dlopen to load dynamic libraries; however, sometimes we need to operate on static libraries, and static libraries cannot be loaded into shared memory via dlopen, so this layer is added
+    to obtain the call site of a function by its name; this class is built using the singleton pattern
 */
 
 #include <iostream>
@@ -39,14 +39,14 @@ public:
     ObtainPointerC(const ObtainPointerC&) = delete;
     ObtainPointerC& operator=(const ObtainPointerC&) = delete;
 
-    // 一下都是些业务需要的代码
+    // The code below is required for the business logic
 
-    // 注册函数：字符串 → 函数指针（可扩展添加更多函数）
+    // Register function: string -> function pointer (extensible to add more functions)
     void registerMsgFunc(const std::string& funcName, MsgTypeSupportFunc func);
 
     void registerSrvFunc(const std::string& funcName, SrvTypeSupportFunc func);
 
-    // 查询函数：通过字符串获取函数调用点（核心接口）
+    // Query function: get the function call site by string (core interface)
     MsgTypeSupportFunc getMsgFunc(const std::string& funcName);
 
     SrvTypeSupportFunc getSrvFunc(const std::string& funcName);

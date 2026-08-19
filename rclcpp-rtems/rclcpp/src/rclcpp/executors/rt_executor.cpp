@@ -4,7 +4,7 @@
  * RTExecutor — OS-Kernel-Driven Real-Time Callback Dispatch Implementation
  *
  * =====================================================================
- *  Design Principle / 设计原则
+ *  Design Principle
  * =====================================================================
  *
  *   ALL scheduling is triggered by the OS kernel.  NO user-level
@@ -26,7 +26,7 @@
  *   The RTEMS FP scheduler is the ONLY scheduling decision-maker.
  *
  * =====================================================================
- *  Execution Flow / 执行流程
+ *  Execution Flow
  * =====================================================================
  *
  *   FLOW 1: Timer Callback (driver → CBTask)
@@ -69,7 +69,7 @@
  *   The OS kernel triggers ALL callback execution.
  *
  * =====================================================================
- *  rclcpp Modifications / rclcpp 修改说明
+ *  rclcpp Modifications
  * =====================================================================
  *
  *   Four targeted modifications to rclcpp enable direct notification:

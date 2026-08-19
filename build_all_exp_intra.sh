@@ -2,7 +2,7 @@
 #
 # build_all_exp_intra.sh — Build sequentially Exp_Intra-ST, Exp_Intra-MT, Exp_Intra-Picas, Exp_Intra-ROSRT, Exp_Intra-Ours
 #
-# 从宿主机Execute,通过 docker exec 在 rtems6-dev Container内Build
+# Execute from the host, building inside the rtems6-dev container via docker exec
 #
 set -euo pipefail
 
@@ -17,7 +17,7 @@ NC='\033[0m'
 
 EXPERIMENTS=("Example/Exp_Intra-ST" "Example/Exp_Intra-MT" "Example/Exp_Intra-Picas" "Example/Exp_Intra-ROSRT" "Example/Exp_Intra-Ours")
 
-# ---- CheckContainer状态 ----
+# ---- Check container status ----
 if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
     echo -e "${RED}Error: Container $CONTAINER is not running${NC}"
     echo "Please start the container first, then run this script."
@@ -52,7 +52,7 @@ for exp in "${EXPERIMENTS[@]}"; do
         continue
     fi
 
-    # 在Container内Build
+    # Build inside the container
     if docker exec -i "$CONTAINER" bash -lc \
         "cd ${WORKSPACE}/${exp} && ./build_all.sh"; then
         EXP_ELAPSED=$(( $(date +%s) - EXP_START ))

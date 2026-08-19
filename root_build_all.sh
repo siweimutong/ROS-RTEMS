@@ -50,7 +50,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$build_modle" ]]; then
-    echo -e "${RED}Error: 必须指定Build mode(force/no-force)${NC}" >&2
+    echo -e "${RED}Error: must specify a Build mode (force/no-force)${NC}" >&2
     show_help
 fi
 
@@ -116,12 +116,12 @@ is_failed() {
 compile_one() {
     local component=$1
 
-    # alreadyBuild则Skipping
+    # Skip if already built
     if is_compiled "$component"; then
         return 0
     fi
 
-    # 先Builddependency
+    # Build dependencies first
     for dep in ${DEPENDENCIES[$component]}; do
         if ! is_compiled "$dep"; then
             compile_one "$dep" || {
@@ -170,7 +170,7 @@ compile_one() {
 # ===================== Main flow =====================
 echo ""
 echo "========================================================"
-echo "  ROS2-RTEMS Build(单进程顺orderMode)"
+echo "  ROS2-RTEMS Build (single-process sequential mode)"
 echo "  Mode: $build_modle"
 echo "  Working directory: $root_path"
 echo "  Thread count: $COMPILE_THREADS"

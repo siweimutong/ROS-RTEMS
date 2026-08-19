@@ -4,7 +4,7 @@
  * RTEMS RTSS Timer Device Driver — Public API
  *
  * =====================================================================
- *  Overview / 概览
+ *  Overview
  * =====================================================================
  *
  * Provides periodic hardware timer channels via /dev/rtss_timer.
@@ -13,7 +13,7 @@
  * Reader/Worker tasks needed.
  *
  * =====================================================================
- *  Hardware / 硬件
+ *  Hardware
  * =====================================================================
  *
  * Uses the Cortex-A9 Private Timer (PT) at 0x1f000600 (IRQ 29).
@@ -25,7 +25,7 @@
  * dependency on CONFIGURE_MICROSECONDS_PER_TICK.
  *
  * =====================================================================
- *  Channel Multiplexing / 通道复用
+ *  Channel Multiplexing
  * =====================================================================
  *
  * A single PT hardware timer is multiplexed across up to
@@ -42,7 +42,7 @@
  *   next_fire = next_fire + period_ns  (not "now + period_ns")
  *
  * =====================================================================
- *  Direct Task Notification Path / 直接任务通知路径
+ *  Direct Task Notification Path
  * =====================================================================
  *
  *   PT hardware interrupt (IRQ 29)
@@ -59,7 +59,7 @@
  *   eliminating priority inversion entirely.
  *
  * =====================================================================
- *  Driver Usage Flow / 驱动使用流程
+ *  Driver Usage Flow
  * =====================================================================
  *
  *   1. open("/dev/rtss_timer", O_RDWR)
@@ -73,7 +73,7 @@
  *   8. close(fd)
  *
  * =====================================================================
- *  Integration with RTExecutor CallbackTask / 与 RTExecutor 集成
+ *  Integration with RTExecutor CallbackTask
  * =====================================================================
  *
  *   register_rt_timer() → CallbackTask → setup_timer_driver():

@@ -4,7 +4,7 @@
  * RTExecutor — OS-Kernel-Driven Real-Time Callback Dispatch on RTEMS
  *
  * =====================================================================
- *  Core Design Principle / 核心设计原则
+ *  Core Design Principle
  * =====================================================================
  *
  *   NO user-level scheduling.  Every callback is a standalone RTEMS
@@ -21,7 +21,7 @@
  *     - dispatch_callback (user-level callback enqueue)
  *
  * =====================================================================
- *  Architecture / 架构
+ *  Architecture
  * =====================================================================
  *
  *   ┌───────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@
  *     loop:  rtems_event_receive(RTEMS_EVENT_1)  →  callback()  →  repeat
  *
  * =====================================================================
- *  Trigger Paths / 触发路径
+ *  Trigger Paths
  * =====================================================================
  *
  *   Timer callbacks (register_rt_timer):
@@ -62,7 +62,7 @@
  *     a kernel event to the corresponding CBTask.
  *
  * =====================================================================
- *  Comparison with Previous Design / 与前版设计对比
+ *  Comparison with Previous Design
  * =====================================================================
  *
  *   Previous:  rcl_wait → dispatch_callback → RtsemQueue → worker_loop → execute
@@ -102,7 +102,6 @@ namespace executors
 
 /* ================================================================
  *  RtPriority — Callback Priority Defaults
- *  回调优先级默认值
  *
  *  Named default priority levels.  Users can pass any
  *  rtems_task_priority value; these are only for defaults.
@@ -121,7 +120,6 @@ enum RtPriority : rtems_task_priority {
 
 /* ================================================================
  *  CallbackTask — One RTEMS Task per Callback
- *  回调任务：每个回调对应一个独立的 RTEMS 任务
  *
  *  Each CallbackTask wraps a single RTEMS real-time task that
  *  executes one callback function.  The task blocks on
@@ -224,7 +222,6 @@ private:
 
 /* ================================================================
  *  RTExecutor — RTEMS Real-Time Executor
- *  RTEMS 实时执行器
  *
  *  Replaces the standard rclcpp::Executor's middleware scheduling
  *  with OS-kernel-driven dispatch via CallbackTasks.

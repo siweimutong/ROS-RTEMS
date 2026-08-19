@@ -39,15 +39,15 @@ namespace detail {
 
 pipe_select_interrupter::pipe_select_interrupter()
 {
-  // open_descriptors(); // asio中是使用管道时间通信，但是rtems系统中的kevent不支持管道注册，所以改用本地socket实现
+  // open_descriptors(); // asio uses a pipe for time-based communication, but the kevent in the RTEMS system does not support pipe registration, so a local socket is used instead
   open_descriptors_socket();
 }
 
 void pipe_select_interrupter::open_descriptors_socket()
 {
-  int sock_fd[2];  // 替代 pipe_fd[2]
+  int sock_fd[2];  // Replaces pipe_fd[2]
     
-  // 1. 创建socket对（类似pipe）
+  // 1. Create a socket pair (similar to a pipe)
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sock_fd) == -1) {
       perror("socketpair");
       exit(1);

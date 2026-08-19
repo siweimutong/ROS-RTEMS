@@ -2,7 +2,7 @@
 #
 # build_all_exp_inter.sh — Build sequentially Exp_Inter-ST, Exp_Inter-MT, Exp_Inter-Picas, Exp_Inter-ROSRT, Exp_Inter-Ours
 #
-# 从宿主机Execute,通过 docker exec 在 rtems6-dev Container内Build
+# Execute from the host, building inside the rtems6-dev container via docker exec
 #
 set -euo pipefail
 

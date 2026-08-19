@@ -1,11 +1,11 @@
-// rtems_posix_stub.hpp —— RTEMS 缺失 POSIX 接口桩函数
+// rtems_posix_stub.hpp —— Stub functions for POSIX interfaces missing on RTEMS
 #ifndef RTEMS_POSIX_STUB_HPP
 #define RTEMS_POSIX_STUB_HPP
 
-// 2. 打桩：ftruncate 空实现（返回 0 表示成功，适配 Boost 错误处理）
+// 2. Stub: empty ftruncate implementation (returns 0 for success, compatible with Boost error handling)
 extern "C" int ftruncate(int fd, off_t length);
 
-// 3. 兜底：补充其他可能缺失的文件操作接口（按需）
+// 3. Fallback: add other file operation interfaces that may be missing (as needed)
 extern "C" int truncate(const char* path, off_t length);
 
 #endif // RTEMS_POSIX_STUB_HPP

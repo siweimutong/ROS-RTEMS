@@ -1,30 +1,30 @@
-// rtems_shm_stub.hpp —— RTEMS 共享内存接口桩函数
+// rtems_shm_stub.hpp —— RTEMS shared memory interface stub functions
 
-// 1. 引入必要头文件（定义 mode_t/oflag 等类型）
-#include <fcntl.h>   // O_RDWR/O_CREAT 等宏
-#include <sys/stat.h>// mode_t 类型
-#include <unistd.h>  // close 函数
+// 1. Include required headers (defines types such as mode_t/oflag)
+#include <fcntl.h>   // Macros such as O_RDWR/O_CREAT
+#include <sys/stat.h>// mode_t type
+#include <unistd.h>  // close function
 
 #include "stub/rtems_shm_stub.hpp"
 
-// 2. 为 RTEMS 打桩：空实现 shm_open（返回无效句柄 -1）
+// 2. Stub for RTEMS: empty shm_open implementation (returns invalid handle -1)
 extern "C" int shm_open(const char* name, int oflag, mode_t mode) 
 {
-    // RTEMS 无跨进程共享内存，直接返回无效句柄
-    (void)name;  // 屏蔽未使用参数警告
+    // RTEMS has no cross-process shared memory; return an invalid handle directly
+    (void)name;  // Suppress unused parameter warning
     (void)oflag;
     (void)mode;
-    return -1;   // 无效文件句柄，适配 Boost 错误处理逻辑
+    return -1;   // Invalid file handle, compatible with Boost error handling logic
 }
 
-// 3. 配套桩函数：shm_unlink（空实现，返回 0 表示成功）
+// 3. Companion stub: shm_unlink (empty implementation, returns 0 for success)
 extern "C" int shm_unlink(const char* name) 
 {
     (void)name;
     return 0;
 }
 
-// 4. 若 Boost 还用到 mmap/munmap，补充桩函数（按需）
+// 4. If Boost also uses mmap/munmap, add stubs as needed
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,7 +35,7 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
     (void)flags;
     (void)fd;
     (void)offset;
-    return nullptr; // 返回映射失败
+    return nullptr; // Indicate mapping failure
 }
 int munmap(void* addr, size_t length) {
     (void)addr;

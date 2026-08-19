@@ -334,7 +334,7 @@ void Log::get_timestamp(
     //    (void)ms;
 #else
 /*
- * GCC 版本较低不支持 put_time()
+ * Older GCC versions do not support put_time()
  */
 #ifdef SYLIXOS
     stream << ctime(&now_c) << "." << std::setw(3) << std::setfill('0') << ms << " ";

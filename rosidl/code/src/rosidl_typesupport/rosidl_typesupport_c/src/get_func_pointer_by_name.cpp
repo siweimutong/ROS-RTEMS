@@ -24,7 +24,7 @@ const rosidl_message_type_support_t *rosidl_typesupport_introspection_c__get_mes
 #endif
 
 ObtainPointerC::ObtainPointerC(){
-    // 初始化：绑定目标字符串与函数指针
+    // Initialization: bind target strings to function pointers
     registerMsgFunc(
         "rosidl_typesupport_fastrtps_c__get_message_type_support_handle__rcl_interfaces__msg__Log",
         rosidl_typesupport_fastrtps_c__get_message_type_support_handle__rcl_interfaces__msg__Log
@@ -55,7 +55,7 @@ ObtainPointerC::~ObtainPointerC(){
     if (instance_){
         delete instance_;
     }else{
-        printf("警告：instance_实例的销毁不是在其析构函数中进行的，可能是在外部进行的，注意实例销毁的位置是否合法\r\n");
+        printf("Warning: instance_ was not destroyed in its destructor; it may have been destroyed externally. Check whether the destruction location is legitimate.\r\n");
     }
 }
 
@@ -78,12 +78,12 @@ SrvTypeSupportFunc ObtainPointerC::getSrvFunc(const std::string& funcName) {
 }
 
 int ObtainPointerC::isMsgOrSrv(const std::string& funcName){
-    // 1. 定义目标子串
+    // 1. Define the target substrings
     const std::string msg_substr = "get_message_type_support";
     const std::string srv_substr = "get_service_type_support";
 
-    // 2. 使用 std::string::find 查找子串
-    // find 返回子串首次出现的索引，std::string::npos 表示未找到
+    // 2. Search for the substrings using std::string::find
+    // find returns the index of the first occurrence; std::string::npos means not found
     size_t pos = funcName.find(msg_substr);
 
     if(pos != std::string::npos) return 0;
@@ -92,8 +92,8 @@ int ObtainPointerC::isMsgOrSrv(const std::string& funcName){
 
     if(pos != std::string::npos) return 1;
 
-    // 两个要查找的字符串都不在被查找的字符串中，目前看来暂时是异常情况
+    // Neither target substring was found in the string; this is currently treated as an abnormal case
     throw std::runtime_error(
-        "ObtainPointerCpp::isMsgOrSrv 错误：函数名既不包含 msg 也不包含 srv 子串！funcName = " + funcName
+        "ObtainPointerCpp::isMsgOrSrv error: the function name contains neither the msg nor the srv substring! funcName = " + funcName
     );
 }

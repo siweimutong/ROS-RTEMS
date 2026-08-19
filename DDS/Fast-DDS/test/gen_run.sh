@@ -8,7 +8,7 @@ if [ -d "${target_dir}" ]; then
     rm -rf "${target_dir}"
     echo "tmp directory in current directory existed; successfully deleted"
 else
-    echo "当前directory下not foundtmpdirectory,noneneedDelete"
+    echo "No tmp directory found in the current directory; nothing to delete"
 fi
 
 mkdir tmp

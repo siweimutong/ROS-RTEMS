@@ -2,42 +2,43 @@
 set -euo pipefail
 
 # =====================================================================
-#  build_all.sh — ROS2-RTEMS 统一编译脚本
+#  build_all.sh — ROS2-RTEMS unified build script
 #
-#  统一管理底层库和应用层项目的编译。底层库使用 RTcolcon 编译，
-#  应用层项目使用本脚本管理。
+#  Manages the build of the low-level libraries and application-layer
+#  projects. Low-level libraries are built with RTcolcon, while
+#  application-layer projects are managed by this script.
 #
-#  用法：
-#    ./build_all.sh [选项] <编译模式>
+#  Usage:
+#    ./build_all.sh [options] <build mode>
 #
-#  选项：
-#    -h, --help          显示帮助信息
-#    -j, --jobs NUM      RTcolcon 最大并行数（默认: 4）
-#    -t, --threads NUM   RTcolcon 单组件编译线程数（默认: 8）
-#    -l, --libs-only     仅编译底层库
-#    -a, --apps-only     仅编译应用层项目
-#    -s, --skip APP      跳过指定应用（可多次使用）
+#  Options:
+#    -h, --help          Show help message
+#    -j, --jobs NUM      RTcolcon maximum number of parallel processes (default: 4)
+#    -t, --threads NUM   RTcolcon compile threads per component (default: 8)
+#    -l, --libs-only     Build only the low-level libraries
+#    -a, --apps-only     Build only the application-layer projects
+#    -s, --skip APP      Skip the specified application (can be used multiple times)
 #
-#  编译模式：
-#    force               强制编译（清空历史标记，重新编译）
-#    no-force            增量编译（仅编译未完成的组件）
+#  Build modes:
+#    force               Force rebuild (clear history markers and rebuild)
+#    no-force            Incremental build (build only incomplete components)
 #
-#  示例：
-#    ./build_all.sh force                        # 编译全部（库+应用）
-#    ./build_all.sh -l no-force                  # 仅增量编译库
-#    ./build_all.sh -a force                     # 仅强制编译应用
-#    ./build_all.sh -s examples force            # 编译全部，跳过 examples
-#    ./build_all.sh -j 8 -t 16 force             # 8并行、16线程编译
+#  Examples:
+#    ./build_all.sh force                        # Build everything (libs + apps)
+#    ./build_all.sh -l no-force                  # Incrementally build only the libs
+#    ./build_all.sh -a force                     # Force build only the apps
+#    ./build_all.sh -s examples force            # Build everything, skip examples
+#    ./build_all.sh -j 8 -t 16 force             # Build with 8 processes, 16 threads
 # =====================================================================
 
-# ===================== 颜色 =====================
+# ===================== Colors =====================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# ===================== 默认参数 =====================
+# ===================== Default parameters =====================
 DEFAULT_MAX_PROCESSES=4
 DEFAULT_COMPILE_THREADS=8
 MAX_PROCESSES=$DEFAULT_MAX_PROCESSES
@@ -47,13 +48,13 @@ BUILD_APPS=true
 SKIP_APPS=()
 BUILD_MODE=""
 
-# ===================== 应用层项目定义 =====================
+# ===================== Application project definitions =====================
 #
-# 格式："项目名:config子目录路径:依赖列表(空格分隔)"
+# Format: "project_name:config_subdir_path:dependency_list(space-separated)"
 #
-# 依赖列表说明：
-#   - "libs" 表示依赖底层库全部编译完成
-#   - 其他项目名表示依赖特定应用项目
+# Dependency list notes:
+#   - "libs" means the low-level libraries must all be built first
+#   - Other project names mean the specified application project is a dependency
 #
 APP_PROJECTS=(
     "intra_process_demo:config:libs"
@@ -61,40 +62,40 @@ APP_PROJECTS=(
     "examples:config:libs"
 )
 
-# ===================== 帮助信息 =====================
+# ===================== Help message =====================
 show_help() {
     cat << EOF
-ROS2-RTEMS 统一编译脚本
-用法：$0 [选项] <编译模式>
+ROS2-RTEMS unified build script
+Usage: $0 [options] <build mode>
 
-选项：
-  -h, --help          显示此帮助信息
-  -j, --jobs NUM      RTcolcon 最大并行数（默认：$DEFAULT_MAX_PROCESSES）
-  -t, --threads NUM   RTcolcom 单组件编译线程数（默认：$DEFAULT_COMPILE_THREADS）
-  -l, --libs-only     仅编译底层库（跳过应用层）
-  -a, --apps-only     仅编译应用层项目（跳过底层库）
-  -s, --skip APP      跳过指定应用项目（可多次使用）
+Options:
+  -h, --help          Show this help message
+  -j, --jobs NUM      RTcolcon maximum number of parallel processes (default: $DEFAULT_MAX_PROCESSES)
+  -t, --threads NUM   RTcolcon compile threads per component (default: $DEFAULT_COMPILE_THREADS)
+  -l, --libs-only     Build only the low-level libraries (skip apps)
+  -a, --apps-only     Build only the application-layer projects (skip libs)
+  -s, --skip APP      Skip the specified application project (can be used multiple times)
 
-编译模式：
-  force               强制编译（清空历史标记，重新编译所有组件）
-  no-force            增量编译（仅编译未完成/失败的组件）
+Build modes:
+  force               Force rebuild (clear history markers, rebuild all components)
+  no-force            Incremental build (build only incomplete/failed components)
 
-应用层项目：
-  intra_process_demo   进程内通信演示（含硬件定时器）
-  pingpong_exp         Ping-Pong 延迟测试
-  examples             示例程序
+Application projects:
+  intra_process_demo   Intra-process communication demo (with hardware timer)
+  pingpong_exp         Ping-Pong latency test
+  examples             Example programs
 
-示例：
-  $0 force                             # 编译全部
-  $0 -l no-force                       # 仅增量编译底层库
-  $0 -a force                          # 仅强制编译应用层
-  $0 -s examples -s exp force          # 跳过 examples 和 exp
-  $0 -j 8 -t 16 force                  # 8并行、16线程
+Examples:
+  $0 force                             # Build everything
+  $0 -l no-force                       # Incrementally build only the libs
+  $0 -a force                          # Force build only the apps
+  $0 -s examples -s exp force          # Skip examples and exp
+  $0 -j 8 -t 16 force                  # 8 parallel processes, 16 threads
 EOF
     exit 0
 }
 
-# ===================== 解析参数 =====================
+# ===================== Parse arguments =====================
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help)
@@ -105,7 +106,7 @@ while [[ $# -gt 0 ]]; do
                 MAX_PROCESSES=$2
                 shift 2
             else
-                echo -e "${RED}错误：-j/--jobs 后必须跟正整数${NC}" >&2
+                echo -e "${RED}Error: -j/--jobs requires a positive integer${NC}" >&2
                 exit 1
             fi
             ;;
@@ -114,7 +115,7 @@ while [[ $# -gt 0 ]]; do
                 COMPILE_THREADS=$2
                 shift 2
             else
-                echo -e "${RED}错误：-t/--threads 后必须跟正整数${NC}" >&2
+                echo -e "${RED}Error: -t/--threads requires a positive integer${NC}" >&2
                 exit 1
             fi
             ;;
@@ -131,7 +132,7 @@ while [[ $# -gt 0 ]]; do
                 SKIP_APPS+=("$2")
                 shift 2
             else
-                echo -e "${RED}错误：-s/--skip 后必须跟项目名${NC}" >&2
+                echo -e "${RED}Error: -s/--skip requires a project name${NC}" >&2
                 exit 1
             fi
             ;;
@@ -140,28 +141,29 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            echo -e "${RED}错误：未知参数 '$1'${NC}" >&2
+            echo -e "${RED}Error: Unknown argument '$1'${NC}" >&2
             show_help
             ;;
     esac
 done
 
 if [[ -z "$BUILD_MODE" ]]; then
-    echo -e "${RED}错误：必须指定编译模式（force/no-force）${NC}" >&2
+    echo -e "${RED}Error: a build mode (force/no-force) must be specified${NC}" >&2
     show_help
 fi
 
 WORKSPACE_DIR="$(cd "$(dirname "$0")" && pwd)"
 START_TIME=$(date +%s)
 
-# ===================== 工具函数 =====================
+# ===================== Utility functions =====================
 
 log_info()  { echo -e "[$(date +'%H:%M:%S')] ${BLUE}$1${NC}"; }
 log_ok()    { echo -e "[$(date +'%H:%M:%S')] ${GREEN}$1${NC}"; }
 log_warn()  { echo -e "[$(date +'%H:%M:%S')] ${YELLOW}$1${NC}"; }
 log_fail()  { echo -e "[$(date +'%H:%M:%S')] ${RED}$1${NC}"; }
 
-# 检查底层库是否已编译（检查关键 .a 文件是否安装到 RTEMS 系统目录）
+# Check whether the low-level libraries are built (check if the key .a files
+# are installed in the RTEMS system directory)
 libs_ready() {
     local lib_dir="$HOME/RTEMS/quick-start/rtems/6/arm-rtems6/realview_pbx_a9_qemu/lib"
     for lib in librclcpp.a librcl.a librmw.a libyaml.a librcutils.a; do
@@ -172,7 +174,7 @@ libs_ready() {
     return 0
 }
 
-# 检查应用是否在跳过列表中
+# Check whether the application is in the skip list
 should_skip() {
     local app_name=$1
     for skip in "${SKIP_APPS[@]}"; do
@@ -183,34 +185,34 @@ should_skip() {
     return 1
 }
 
-# 解析应用项目定义
+# Parse an application project definition
 parse_app() {
     local entry=$1
     local field=$2
     echo "$entry" | cut -d: -f$field
 }
 
-# 编译单个应用项目
+# Build a single application project
 build_app() {
     local app_name=$1
     local config_subdir=$2
     local deps=$3
 
     if should_skip "$app_name"; then
-        log_warn "跳过 $app_name（--skip）"
+        log_warn "Skipping $app_name (--skip)"
         return 0
     fi
 
-    # 检查依赖
+    # Check dependencies
     for dep in $deps; do
         if [[ "$dep" == "libs" ]]; then
             if ! libs_ready; then
-                log_fail "$app_name：底层库未编译完成，请先运行 -l force"
+                log_fail "$app_name: low-level libraries are not fully built, run -l force first"
                 return 1
             fi
         else
             if [[ ! -f "$WORKSPACE_DIR/build/.compiled_app_${dep}" ]]; then
-                log_fail "$app_name：依赖 $dep 未编译"
+                log_fail "$app_name: dependency $dep is not built"
                 return 1
             fi
         fi
@@ -220,34 +222,34 @@ build_app() {
     local config_dir="$app_dir/$config_subdir"
 
     if [[ ! -d "$app_dir" ]]; then
-        log_fail "$app_name：目录不存在"
+        log_fail "$app_name: directory does not exist"
         return 1
     fi
 
     if [[ ! -d "$config_dir" ]]; then
-        log_fail "$app_name：config 目录不存在 ($config_dir)"
+        log_fail "$app_name: config directory does not exist ($config_dir)"
         return 1
     fi
 
-    log_info "开始编译 $app_name"
+    log_info "Starting build of $app_name"
     local app_start=$(date +%s)
 
-    # Step 1: gen_run.sh（生成 wscript 和下载 waf）
+    # Step 1: gen_run.sh (generate wscript and download waf)
     if [[ -f "$config_dir/gen_run.sh" ]]; then
         cd "$config_dir"
         if ! bash gen_run.sh "$BUILD_MODE" "$WORKSPACE_DIR"; then
-            log_fail "$app_name：gen_run.sh 失败"
+            log_fail "$app_name: gen_run.sh failed"
             cd "$WORKSPACE_DIR"
             return 1
         fi
         cd "$WORKSPACE_DIR"
     fi
 
-    # Step 2: run.sh（configure + build）
+    # Step 2: run.sh (configure + build)
     if [[ -f "$config_dir/run.sh" ]]; then
         cd "$config_dir"
         if ! bash run.sh "$WORKSPACE_DIR"; then
-            log_fail "$app_name：run.sh 失败"
+            log_fail "$app_name: run.sh failed"
             cd "$WORKSPACE_DIR"
             return 1
         fi
@@ -255,33 +257,33 @@ build_app() {
     fi
 
     local app_elapsed=$(( $(date +%s) - app_start ))
-    log_ok "$app_name 编译完成 (${app_elapsed}s)"
+    log_ok "$app_name build finished (${app_elapsed}s)"
 
-    # 标记编译完成
+    # Mark the build as complete
     mkdir -p "$WORKSPACE_DIR/build"
     touch "$WORKSPACE_DIR/build/.compiled_app_${app_name}"
 
     return 0
 }
 
-# ===================== 主流程 =====================
+# ===================== Main flow =====================
 echo ""
 echo "========================================================"
-echo "  ROS2-RTEMS 统一编译"
-echo "  模式: $BUILD_MODE"
-echo "  工作目录: $WORKSPACE_DIR"
+echo "  ROS2-RTEMS unified build"
+echo "  Mode: $BUILD_MODE"
+echo "  Working directory: $WORKSPACE_DIR"
 if [[ "$BUILD_LIBS" == true ]]; then
-    echo "  底层库: 编译"
+    echo "  Low-level libraries: build"
 else
-    echo "  底层库: 跳过"
+    echo "  Low-level libraries: skip"
 fi
 if [[ "$BUILD_APPS" == true ]]; then
-    echo "  应用层: 编译"
+    echo "  Application layer: build"
 else
-    echo "  应用层: 跳过"
+    echo "  Application layer: skip"
 fi
 if [[ ${#SKIP_APPS[@]} -gt 0 ]]; then
-    echo "  跳过应用: ${SKIP_APPS[*]}"
+    echo "  Skipped applications: ${SKIP_APPS[*]}"
 fi
 echo "========================================================"
 echo ""
@@ -289,34 +291,34 @@ echo ""
 FAILED_COUNT=0
 SUCCESS_COUNT=0
 
-# ===================== Step 1: 编译底层库 =====================
+# ===================== Step 1: Build low-level libraries =====================
 if [[ "$BUILD_LIBS" == true ]]; then
     echo ""
-    log_info "====== 阶段 1：编译底层库 (RTcolcon) ======"
+    log_info "====== Phase 1: build low-level libraries (RTcolcon) ======"
     echo ""
 
     if [[ -f "$WORKSPACE_DIR/RTcolcon" ]]; then
         cd "$WORKSPACE_DIR"
         if bash RTcolcon -j "$MAX_PROCESSES" -t "$COMPILE_THREADS" "--$BUILD_MODE"; then
-            log_ok "底层库编译完成"
+            log_ok "Low-level libraries built"
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
         else
-            log_fail "底层库编译失败"
+            log_fail "Low-level library build failed"
             FAILED_COUNT=$((FAILED_COUNT + 1))
             if [[ "$BUILD_APPS" == true ]]; then
-                log_warn "底层库编译失败，应用层可能无法编译"
+                log_warn "Low-level library build failed; applications may fail to build"
             fi
         fi
     else
-        log_fail "未找到 RTcolcon 脚本"
+        log_fail "RTcolcon script not found"
         FAILED_COUNT=$((FAILED_COUNT + 1))
     fi
 fi
 
-# ===================== Step 2: 编译应用层项目 =====================
+# ===================== Step 2: Build application projects =====================
 if [[ "$BUILD_APPS" == true ]]; then
     echo ""
-    log_info "====== 阶段 2：编译应用层项目 ======"
+    log_info "====== Phase 2: build application projects ======"
     echo ""
 
     if [[ "$BUILD_MODE" == "force" ]]; then
@@ -336,15 +338,15 @@ if [[ "$BUILD_APPS" == true ]]; then
     done
 fi
 
-# ===================== 总结 =====================
+# ===================== Summary =====================
 END_TIME=$(date +%s)
 TOTAL_ELAPSED=$((END_TIME - START_TIME))
 
 echo ""
 echo "========================================================"
-echo -e "  ${YELLOW}编译总结${NC}"
-echo "  总耗时: ${TOTAL_ELAPSED}s"
-echo -e "  成功: ${GREEN}${SUCCESS_COUNT}${NC}  失败: ${RED}${FAILED_COUNT}${NC}"
+echo -e "  ${YELLOW}Build summary${NC}"
+echo "  Total time: ${TOTAL_ELAPSED}s"
+echo -e "  Success: ${GREEN}${SUCCESS_COUNT}${NC}  Failed: ${RED}${FAILED_COUNT}${NC}"
 echo "========================================================"
 echo ""
 

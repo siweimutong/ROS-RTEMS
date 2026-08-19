@@ -115,7 +115,7 @@ public:
                 {
                     std::stringstream ss;
                     /*
-                     * SylixOS 下 this_thread::get_id() 不能打印本线程 ID
+                     * Under SylixOS, this_thread::get_id() cannot print the current thread ID
                      */
 #ifdef SYLIXOS
                     ss << std::hex << pthread_self();
@@ -340,7 +340,7 @@ public:
         //    (void)ms;
     #else
         /*
-         * GCC 版本较低不支持 put_time()
+         * Older GCC versions do not support put_time()
          */
 #ifdef SYLIXOS
         stream << ctime(&now_c) << "." << std::setw(3) << std::setfill('0') << ms << " ";

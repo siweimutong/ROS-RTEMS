@@ -4,7 +4,7 @@
  * RTEMS RTSS Timer Device Driver — Implementation
  *
  * =====================================================================
- *  Architecture / 架构  (v4 — PT hardware timer, single-shot re-arm)
+ *  Architecture (v4 — PT hardware timer, single-shot re-arm)
  * =====================================================================
  *
  *   ┌───────────────────────────────────────────────────────────┐

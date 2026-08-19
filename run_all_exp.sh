@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# run_all_exp.sh — 依次执行全部实验: Exp_Intra → Exp_Inter
-# 每个脚本完全退出后再执行下一个
+# run_all_exp.sh — Run all experiments in sequence: Exp_Intra → Exp_Inter
+# Each script fully exits before the next one starts
 #
 set -euo pipefail
 

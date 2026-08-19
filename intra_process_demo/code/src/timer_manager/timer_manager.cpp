@@ -1,20 +1,21 @@
 /**
  * @file timer_manager.cpp
  *
- * RTEMS 6.1 ARM 实时定时中断 ROS2 应用
+ * RTEMS 6.1 ARM real-time timer-interrupt ROS2 application
  *
- * 通过 RTEMS 设备驱动 /dev/rtss_timer 读取硬件 tick 中断事件，
- * 驱动 ROS2 定时回调逻辑。
+ * Reads hardware tick interrupt events via the RTEMS device driver
+ * /dev/rtss_timer, driving the ROS2 timer callback logic.
  *
- * 类比 two_node_pipeline 模式：
- *   - TimerProducer : 定时器中断驱动的生产者节点
- *   - TimerConsumer : 事件消费者节点
- *   - 使用 intra-process communication 零拷贝通信
+ * Analogous to the two_node_pipeline pattern:
+ *   - TimerProducer : timer-interrupt-driven producer node
+ *   - TimerConsumer : event consumer node
+ *   - Uses intra-process communication with zero-copy messaging
  *
- * 触发模式由驱动层实现，通过 mode 关键词选择：
- *   - "event"             : 事件位
- *   - "semaphore"         : 二值信号量
- *   - "message_queue"     : 消息队列
+ * The trigger mode is implemented in the driver layer and selected
+ * via the mode keyword:
+ *   - "event"             : event bit
+ *   - "semaphore"         : binary semaphore
+ *   - "message_queue"     : message queue
  */
 
 #include <rclcpp/rclcpp.hpp>
@@ -35,7 +36,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-/* 包含驱动共享头文件 */
+/* Include the driver's shared header */
 extern "C" {
 #include "driver/rtss_timer_driver.h"
 }
@@ -44,7 +45,7 @@ using namespace std::chrono_literals;
 
 using Task = std::function<void()>;
 
-/* ---- RTEMS 辅助 ---- */
+/* ---- RTEMS helpers ---- */
 
 static const char *status_text(rtems_status_code sc)
 {
@@ -66,8 +67,8 @@ static rtss_trigger_mode parse_mode(const std::string &mode)
     if (mode == "message_queue" || mode == "MESSAGE_QUEUE")
         return RTSS_MODE_MESSAGE_QUEUE;
 
-    std::cerr << "[TimeManager] 未知模式 '" << mode
-              << "'，回退到 EVENT" << std::endl;
+    std::cerr << "[TimeManager] unknown mode '" << mode
+              << "', falling back to EVENT" << std::endl;
     return RTSS_MODE_EVENT;
 }
 
@@ -81,7 +82,7 @@ static const char *mode_to_string(rtss_trigger_mode mode)
     }
 }
 
-/* ---- 基于 RTEMS 信号量的任务安全队列 ---- */
+/* ---- RTEMS semaphore-based task-safe queue ---- */
 
 class RtsemQueue {
 public:
@@ -129,12 +130,12 @@ private:
     std::vector<Task>  queue_;
 };
 
-/* ---- 基于 RTEMS tick 驱动的定时器管理器 ---- */
+/* ---- RTEMS tick-driven timer manager ---- */
 
 class TimeManager {
 public:
     /**
-     * @param mode 触发模式关键词："event" / "semaphore" / "message_queue"
+     * @param mode trigger mode keyword: "event" / "semaphore" / "message_queue"
      */
     TimeManager(const std::string &mode)
         : trigger_mode_(parse_mode(mode)),
@@ -148,7 +149,7 @@ public:
     int register_timer(std::function<void()> callback, uint32_t period_ms)
     {
         if (next_channel_ >= RTSS_TIMER_MAX_CHANNELS) {
-            std::cerr << "[TimeManager] 通道数已达上限" << std::endl;
+            std::cerr << "[TimeManager] channel limit reached" << std::endl;
             return -1;
         }
 
@@ -166,56 +167,56 @@ public:
     {
         rtems_status_code sc;
 
-        /* 初始化内部就绪队列 */
+        /* Initialize the internal ready queue */
         sc = ready_queue_.init('R', 'D');
         if (sc != RTEMS_SUCCESSFUL) {
-            std::cerr << "[TimeManager] 队列初始化失败: "
+            std::cerr << "[TimeManager] queue initialization failed: "
                       << status_text(sc) << std::endl;
             return;
         }
 
-        /* 打开设备驱动 */
+        /* Open the device driver */
         dev_fd_ = open(RTSS_DEVICE_NAME, O_RDWR);
         if (dev_fd_ < 0) {
-            std::cerr << "[TimeManager] 无法打开 " << RTSS_DEVICE_NAME
+            std::cerr << "[TimeManager] cannot open " << RTSS_DEVICE_NAME
                       << " (" << strerror(errno) << ")" << std::endl;
             return;
         }
 
-        /* 通过 ioctl 设置驱动层触发模式 */
+        /* Set the driver-layer trigger mode via ioctl */
         rtss_timer_mode_config mode_cfg;
         mode_cfg.mode = trigger_mode_;
         if (ioctl(dev_fd_, RTSS_TIMER_SET_MODE, &mode_cfg) < 0) {
-            std::cerr << "[TimeManager] SET_MODE 失败，回退到 EVENT" << std::endl;
+            std::cerr << "[TimeManager] SET_MODE failed, falling back to EVENT" << std::endl;
             trigger_mode_ = RTSS_MODE_EVENT;
         }
 
-        /* 配置并启动定时器通道 */
+        /* Configure and start the timer channels */
         for (auto &info : timers_) {
             rtss_timer_config cfg;
             cfg.channel      = info->channel;
             cfg.period_ticks = info->period_ticks;
 
             if (ioctl(dev_fd_, RTSS_TIMER_SET_PERIOD, &cfg) < 0) {
-                std::cerr << "[TimeManager] SET_PERIOD 通道 "
-                          << cfg.channel << " 失败" << std::endl;
+                std::cerr << "[TimeManager] SET_PERIOD failed for channel "
+                          << cfg.channel << std::endl;
                 continue;
             }
 
             if (ioctl(dev_fd_, RTSS_TIMER_START, &cfg) < 0) {
-                std::cerr << "[TimeManager] START 通道 "
-                          << cfg.channel << " 失败" << std::endl;
+                std::cerr << "[TimeManager] START failed for channel "
+                          << cfg.channel << std::endl;
                 continue;
             }
 
-            std::cout << "[TimeManager] 通道 " << cfg.channel
-                      << " 已启动，周期 " << cfg.period_ticks
+            std::cout << "[TimeManager] channel " << cfg.channel
+                      << " started, period " << cfg.period_ticks
                       << " ticks" << std::endl;
         }
 
         running_ = true;
 
-        /* 创建 reader 任务：从驱动读取 tick 中断事件 */
+        /* Create the reader task: reads tick interrupt events from the driver */
         sc = rtems_task_create(
             rtems_build_name('R', 'E', 'A', 'D'),
             80,
@@ -224,7 +225,7 @@ public:
             RTEMS_DEFAULT_ATTRIBUTES,
             &reader_task_id_);
         if (sc != RTEMS_SUCCESSFUL) {
-            std::cerr << "[TimeManager] 创建 reader 任务失败: "
+            std::cerr << "[TimeManager] failed to create reader task: "
                       << status_text(sc) << std::endl;
             return;
         }
@@ -234,7 +235,7 @@ public:
             reader_task_entry,
             (rtems_task_argument)this);
 
-        /* 创建 worker 任务：执行回调 */
+        /* Create the worker task: executes callbacks */
         sc = rtems_task_create(
             rtems_build_name('W', 'O', 'R', 'K'),
             70,
@@ -243,7 +244,7 @@ public:
             RTEMS_DEFAULT_ATTRIBUTES,
             &worker_task_id_);
         if (sc != RTEMS_SUCCESSFUL) {
-            std::cerr << "[TimeManager] 创建 worker 任务失败: "
+            std::cerr << "[TimeManager] failed to create worker task: "
                       << status_text(sc) << std::endl;
             return;
         }
@@ -253,7 +254,7 @@ public:
             worker_task_entry,
             (rtems_task_argument)this);
 
-        std::cout << "[TimeManager] 启动（RTEMS 硬件 tick 中断模式），触发模式: "
+        std::cout << "[TimeManager] started (RTEMS hardware tick interrupt mode), trigger mode: "
                   << mode_to_string(trigger_mode_) << std::endl;
     }
 
@@ -275,7 +276,7 @@ public:
             dev_fd_ = -1;
         }
 
-        /* 唤醒 worker 使其退出 */
+        /* Wake the worker so it exits */
         rtems_event_send(worker_task_id_, RTEMS_EVENT_1);
 
         if (reader_task_id_ != RTEMS_ID_NONE) {
@@ -295,7 +296,7 @@ private:
         rtems_interval         period_ticks;
     };
 
-    /* ---- reader 任务：从驱动读取 tick 中断事件 ---- */
+    /* ---- reader task: reads tick interrupt events from the driver ---- */
 
     static rtems_task reader_task_entry(rtems_task_argument arg)
     {
@@ -317,7 +318,7 @@ private:
             if ((size_t)n != sizeof(evt))
                 continue;
 
-            /* 根据通道号找到回调，推入就绪队列 */
+            /* Find the callback for this channel and push it onto the ready queue */
             for (auto &info : timers_) {
                 if (info->channel == evt.channel && info->callback) {
                     ready_queue_.push(info->callback);
@@ -328,7 +329,7 @@ private:
         }
     }
 
-    /* ---- worker 任务：执行回调 ---- */
+    /* ---- worker task: executes callbacks ---- */
 
     static rtems_task worker_task_entry(rtems_task_argument arg)
     {
@@ -342,7 +343,7 @@ private:
         while (running_) {
             Task task;
 
-            /* 等待 reader 发来的通知 */
+            /* Wait for notification from the reader */
             rtems_event_set events;
             rtems_status_code sc = rtems_event_receive(
                 RTEMS_EVENT_1,
@@ -352,7 +353,7 @@ private:
             if (sc != RTEMS_SUCCESSFUL || !running_)
                 break;
 
-            /* 执行就绪队列中的所有回调 */
+            /* Execute all callbacks in the ready queue */
             while (ready_queue_.try_pop(task)) {
                 if (task) task();
             }
@@ -371,7 +372,7 @@ private:
     RtsemQueue         ready_queue_;
 };
 
-/* ---- 定时器生产者节点：通过 tick 中断驱动，发布事件消息 ---- */
+/* ---- Timer producer node: driven by tick interrupts, publishes event messages ---- */
 
 struct TimerProducer : public rclcpp::Node
 {
@@ -383,7 +384,7 @@ struct TimerProducer : public rclcpp::Node
 
         tm_ = std::make_unique<TimeManager>("semaphore");
 
-        /* 通道 0：500ms tick 定时器 */
+        /* Channel 0: 500 ms tick timer */
         tm_->register_timer(
             [this, captured_pub]() {
                 auto pub_ptr = captured_pub.lock();
@@ -391,7 +392,7 @@ struct TimerProducer : public rclcpp::Node
                 static int32_t count_a = 0;
                 auto msg = std::make_unique<std_msgs::msg::Int32>();
                 msg->data = count_a++;
-                printf("[任务A] 500ms tick定时器触发！count=%d, ticks=%u, address=0x%"
+                printf("[Task A] 500ms tick timer fired! count=%d, ticks=%u, address=0x%"
                        PRIXPTR "\n",
                        msg->data,
                        (unsigned)rtems_clock_get_ticks_since_boot(),
@@ -399,7 +400,7 @@ struct TimerProducer : public rclcpp::Node
                 pub_ptr->publish(std::move(msg));
             }, 500);
 
-        /* 通道 1：1000ms tick 定时器 */
+        /* Channel 1: 1000 ms tick timer */
         tm_->register_timer(
             [this, captured_pub]() {
                 auto pub_ptr = captured_pub.lock();
@@ -407,7 +408,7 @@ struct TimerProducer : public rclcpp::Node
                 static int32_t count_b = 0;
                 auto msg = std::make_unique<std_msgs::msg::Int32>();
                 msg->data = count_b++;
-                printf("[任务B] 1000ms tick定时器触发！count=%d, ticks=%u, address=0x%"
+                printf("[Task B] 1000ms tick timer fired! count=%d, ticks=%u, address=0x%"
                        PRIXPTR "\n",
                        msg->data,
                        (unsigned)rtems_clock_get_ticks_since_boot(),
@@ -427,7 +428,7 @@ struct TimerProducer : public rclcpp::Node
     std::unique_ptr<TimeManager> tm_;
 };
 
-/* ---- 定时器消费者节点：接收定时器事件消息 ---- */
+/* ---- Timer consumer node: receives timer event messages ---- */
 
 struct TimerConsumer : public rclcpp::Node
 {
@@ -438,7 +439,7 @@ struct TimerConsumer : public rclcpp::Node
             input,
             10,
             [](std_msgs::msg::Int32::UniquePtr msg) {
-                printf("  [消费者] 收到定时器事件: value=%d, address=0x%" PRIXPTR "\n",
+                printf("  [Consumer] received timer event: value=%d, address=0x%" PRIXPTR "\n",
                        msg->data, reinterpret_cast<std::uintptr_t>(msg.get()));
             });
     }
@@ -446,7 +447,7 @@ struct TimerConsumer : public rclcpp::Node
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_;
 };
 
-/* ---- RTEMS 初始任务 + ROS2 初始化 ---- */
+/* ---- RTEMS init task + ROS2 initialization ---- */
 
 extern "C" {
 
@@ -456,16 +457,16 @@ void Init(rtems_task_argument arg);
 #define CONFIGURE_APPLICATION_NEEDS_CONSOLE_DRIVER
 #define CONFIGURE_APPLICATION_NEEDS_NULL_DRIVER
 
-/* 注册我们的定时器驱动 */
+/* Register our timer driver */
 #define CONFIGURE_APPLICATION_EXTRA_DRIVERS rtss_timer_driver_table
 
-/* 系统配置 */
+/* System configuration */
 #define CONFIGURE_MAXIMUM_FILE_DESCRIPTORS 8
 #define CONFIGURE_MAXIMUM_TIMERS           RTSS_TIMER_MAX_CHANNELS
 #define CONFIGURE_MAXIMUM_SEMAPHORES       8
 #define CONFIGURE_MAXIMUM_MESSAGE_QUEUES   4
 #define CONFIGURE_MAXIMUM_TASKS            8
-#define CONFIGURE_MICROSECONDS_PER_TICK    1000  /* 1ms/tick */
+#define CONFIGURE_MICROSECONDS_PER_TICK    1000  /* 1 ms/tick */
 
 #define CONFIGURE_INIT_TASK_NAME           rtems_build_name('M', 'A', 'I', 'N')
 #define CONFIGURE_INIT_TASK_PRIORITY       50
@@ -484,7 +485,7 @@ void Init(rtems_task_argument arg)
 {
     (void)arg;
 
-    /* 构造 argc/argv，修复原始 rclcpp::init(0, nullptr) 初始化问题 */
+    /* Build argc/argv to work around the original rclcpp::init(0, nullptr) issue */
     char arg0[] = "timer_manager";
     char * argv[] = { arg0, nullptr };
     int argc = 1;

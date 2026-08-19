@@ -35,7 +35,7 @@ on_interrupt() {
 }
 trap on_interrupt INT TERM
 
-# ---- CheckContainer状态 ----
+# ---- Check container status ----
 if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
     echo -e "${RED}Error: Container $CONTAINER is not running${NC}"
     echo "Please start the container first, then run this script."

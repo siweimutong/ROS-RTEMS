@@ -14,10 +14,10 @@ except ImportError:
 
 def init(ctx):
     rtems.init(ctx, version=rtems_version, long_commands=True)
-    ctx.load('compiler_cxx')  # 确保加载 C++ 编译器
+    ctx.load('compiler_cxx')  # Ensure the C++ compiler is loaded
 
 def bsp_configure(conf, arch_bsp):
-    # 这里可以进行 BSP 相关的配置检查
+    # BSP-specific configuration checks can be done here
     pass
 
 def options(opt):
@@ -29,8 +29,8 @@ def configure(conf):
 def build(bld):
     rtems.build(bld)
 
-    # fastrtps_pre 目标（静态库）
-    # 编译和链接静态库
+    # fastrtps_pre target (static library)
+    # Compile and link the static library
     bld.stlib(
         target='fastrtps_pre',
         source=['init.c', 

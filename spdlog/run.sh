@@ -7,7 +7,7 @@ name_array=(
 )
 
 for item in "${name_array[@]}"; do
-    # Iterate到的per个元素赋value给item变量
+    # Iterate over each element and assign its value to the item variable
     cd $item
     ./gen_run.sh $1 $2
     res=$?
