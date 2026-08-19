@@ -30,7 +30,7 @@ for v in NE RT MT Picas Ours; do
   echo "--- $v ($desc) ---"
   for n in "${N_VALUES[@]}"; do
     CURRENT=$((CURRENT + 1))
-    exe="$WORKSPACE/Example/Exp_Inter-$v/$BUILD/${prefix}_n${n}.exe"
+    exe="$WORKSPACE/Exps/Exp_Inter-$v/$BUILD/${prefix}_n${n}.exe"
     raw="$RESULT/${prefix}_n${n}_raw.txt"
     csv="$RESULT/${prefix}_n${n}.csv"
     echo -n "  [$CURRENT/$TOTAL] n=$n ... "

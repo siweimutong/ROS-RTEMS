@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-EXPERIMENTS=("Example/Exp_Intra-ST" "Example/Exp_Intra-MT" "Example/Exp_Intra-Picas" "Example/Exp_Intra-ROSRT" "Example/Exp_Intra-Ours")
+EXPERIMENTS=("Exps/Exp_Intra-ST" "Exps/Exp_Intra-MT" "Exps/Exp_Intra-Picas" "Exps/Exp_Intra-ROSRT" "Exps/Exp_Intra-Ours")
 
 # ---- Check container status ----
 if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then

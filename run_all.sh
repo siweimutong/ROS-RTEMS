@@ -57,7 +57,7 @@ CURRENT=0
 for VARIANT in NE ST RT MT Picas Ours; do
   PREFIX="${VARIANTS[$VARIANT]}"
   TAG="${CSV_TAGS[$VARIANT]}"
-  VARIANT_DIR="$WORKSPACE/Example/Exp_Inter-$VARIANT"
+  VARIANT_DIR="$WORKSPACE/Exps/Exp_Inter-$VARIANT"
 
   for N in "${CHAIN_LENGTHS[@]}"; do
     CURRENT=$((CURRENT + 1))

@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-EXPERIMENTS=("Example/Exp_Intra-ST" "Example/Exp_Intra-MT" "Example/Exp_Intra-Picas" "Example/Exp_Intra-ROSRT" "Example/Exp_Intra-Ours")
+EXPERIMENTS=("Exps/Exp_Intra-ST" "Exps/Exp_Intra-MT" "Exps/Exp_Intra-Picas" "Exps/Exp_Intra-ROSRT" "Exps/Exp_Intra-Ours")
 
 # ---- Cleanup leftover QEMU processes ----
 cleanup_qemu() {

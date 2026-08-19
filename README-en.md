@@ -514,7 +514,7 @@ The following experiment groups have independent build scripts and can be compil
 ```bash
 # Example: Build Exp_Inter-RT experiment group
 docker exec -i rtems6-dev bash -lc \
-  'cd /home/siweimutong/workspace/Example/Exp_Inter-RT && ./build_all.sh'
+  'cd /home/siweimutong/workspace/Exps/Exp_Inter-RT && ./build_all.sh'
 ```
 
 BSP build subdirectory for each experiment group:
@@ -713,9 +713,6 @@ workspace/
 │           └── rtss_timer_driver.c # Cortex-A9 PT driver implementation
 ├── rclcpp-picas/                   # Modified rclcpp (with PiCAS executor)
 ├── rclcpp-rtss25/                  # rclcpp-rtss25 baseline
-├── RTExecutor/                     # RTExecutor standalone benchmark
-├── RTROS/                          # RT-ROS (EventsCBGExecutor) benchmark
-├── PICAS/                          # PiCAS standalone benchmark
 │
 ├── ─── Application Examples ───
 ├── examples/                       # Basic ROS 2 examples
@@ -725,13 +722,12 @@ workspace/
 ├── lifecycle_exp/                  # Lifecycle node experiments
 │
 ├── ─── Experiment Groups (scheduling strategy comparison) ───
-├── Example/
+├── Exps/
 │   ├── Exp_Intra-ST|MT|Ours|Picas|ROSRT/   # Exp_Intra series (intra-process scheduling)
 │   └── Exp_Inter-ST|MT|RT|Ours|Picas|ROSRT/ # Exp_Inter series (inter-process scheduling)
 │
 ├── ─── Auxiliary ───
-├── paper/                          # Paper materials
-└── Results-*/                      # Experiment result output directories
+└── paper/                          # Paper materials
 ```
 
 ---

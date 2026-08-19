@@ -47,7 +47,7 @@
 ├── run_compare.sh            # 核心调度策略对比脚本
 ├── RTcolcon                  # 底层库并行编译管理器
 │
-├── Example/                  # 实验工程（见下）
+├── Exps/                     # 实验工程（见下）
 │   ├── Exp_Intra-MT|ST|Ours|Picas|ROSRT/   # 进程内(intra-process)实验组
 │   └── Exp_Inter-MT|ST|RT|Ours|Picas|ROSRT/ # 进程间(inter-process)实验组
 │
@@ -56,14 +56,12 @@
 ├── rclcpp-rtems/             # 改造版 rclcpp（RTExecutor + DDS 通知）
 ├── rclcpp-picas/             # 改造版 rclcpp（PiCAS 执行器）
 ├── rclcpp-rtss25/            # rclcpp-rtss25 基线
-├── RTExecutor/ RTROS/ PICAS/ # 执行器/框架独立基准工程
 ├── intra_process_demo/       # 进程内零拷贝通信演示
 ├── lifecycle_exp/ pingpong_exp/ examples/ demos/  # 示例与实验包
-├── paper/                    # 论文材料
-└── Results-*/                # 实验结果输出目录
+└── paper/                    # 论文材料
 ```
 
-### 实验工程（Example/）
+### 实验工程（Exps/）
 
 | 工程 | 说明 |
 |------|------|
@@ -90,7 +88,7 @@ docker exec -i rtems6-dev bash -lc \
 
 # 3. 编译并运行实验（示例：Exp_Intra-MT）
 docker exec -i rtems6-dev bash -lc \
-  'cd /home/siweimutong/workspace/Example/Exp_Intra-MT && ./build_all.sh && ./run.sh all'
+  'cd /home/siweimutong/workspace/Exps/Exp_Intra-MT && ./build_all.sh && ./run.sh all'
 
 # 4. 批量运行全部实验组
 docker exec -i rtems6-dev bash -lc \
