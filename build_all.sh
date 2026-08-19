@@ -58,10 +58,7 @@ BUILD_MODE=""
 APP_PROJECTS=(
     "intra_process_demo:config:libs"
     "pingpong_exp:config:libs"
-    "exp:config:libs"
     "examples:config:libs"
-    "exp1:config"
-    "Exp2.1:config:libs"
 )
 
 # ===================== 帮助信息 =====================
@@ -85,7 +82,6 @@ ROS2-RTEMS 统一编译脚本
 应用层项目：
   intra_process_demo   进程内通信演示（含硬件定时器）
   pingpong_exp         Ping-Pong 延迟测试
-  exp                  RTExecutor 实验验证包
   examples             示例程序
 
 示例：

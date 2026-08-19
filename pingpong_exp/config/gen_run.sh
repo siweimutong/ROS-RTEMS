@@ -21,7 +21,7 @@ SHARED_CACHE="$WORKSPACE_DIR/.waf_cache"
 if [[ -f "$SHARED_CACHE/waf" ]]; then
     CACHED_WAF="$SHARED_CACHE/waf"
 else
-    for sibling in ../intra_process_demo/config/tmp ../examples/config/tmp ../exp/config/tmp; do
+    for sibling in ../intra_process_demo/config/tmp ../examples/config/tmp; do
         if [[ -f "$sibling/waf" ]]; then
             CACHED_WAF="$sibling/waf"
             break
@@ -43,7 +43,7 @@ CACHED_RTEMS_WAF=""
 if [[ -d "$SHARED_CACHE/rtems_waf" ]]; then
     CACHED_RTEMS_WAF="$SHARED_CACHE/rtems_waf"
 else
-    for sibling in ../intra_process_demo/config/tmp ../examples/config/tmp ../exp/config/tmp; do
+    for sibling in ../intra_process_demo/config/tmp ../examples/config/tmp; do
         if [[ -d "$sibling/rtems_waf" ]]; then
             CACHED_RTEMS_WAF="$sibling/rtems_waf"
             break

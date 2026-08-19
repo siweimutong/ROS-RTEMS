@@ -507,10 +507,7 @@ docker exec -i rtems6-dev bash -lc \
 |---------|---------------------|------------|-------------|
 | `intra_process_demo` | `config` | libs | Intra-process communication demo (with hardware timer) |
 | `pingpong_exp` | `config` | libs | Ping-pong latency test |
-| `exp` | `config` | libs | RTExecutor experimental validation package |
 | `examples` | `config` | libs | Basic ROS 2 examples |
-| `exp1` | `config` | — | Data processing experiment |
-| `Exp2.1` | `config` | libs | SingleThreaded overhead experiment |
 
 ### 3.5 Individual Experiment Group Build
 

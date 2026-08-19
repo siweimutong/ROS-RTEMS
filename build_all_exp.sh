@@ -17,11 +17,8 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 BUILD_SCRIPTS=(
-    "build_all_exp1.sh"
     "build_all_exp_intra.sh"
     "build_all_exp_inter.sh"
-    "build_all_exp5.sh"
-    "build_all_exp6.sh"
 )
 
 echo ""

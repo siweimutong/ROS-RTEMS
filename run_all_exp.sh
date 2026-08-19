@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run_all_exp.sh — 依次执行全部实验: Exp1 → Exp_Intra → Exp_Inter → Exp5 → Exp6
+# run_all_exp.sh — 依次执行全部实验: Exp_Intra → Exp_Inter
 # 每个脚本完全退出后再执行下一个
 #
 set -euo pipefail
@@ -23,11 +23,8 @@ cleanup_qemu() {
 cleanup_qemu
 
 STEPS=(
-    "run_all_exp1.sh"
     "run_all_exp_intra.sh"
     "run_all_exp_inter.sh"
-    "run_all_exp5.sh"
-    "run_all_exp6.sh"
 )
 
 TOTAL=${#STEPS[@]}
