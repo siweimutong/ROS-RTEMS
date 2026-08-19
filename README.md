@@ -1,3 +1,5 @@
+**简体中文** | [**English**](README-en.md)
+
 # ROS-RTEMS — ROS 2 on RTEMS 6.1 移植与实时执行器
 
 将完整的 **ROS 2 (Humble) 核心中间件栈** 移植到 **RTEMS 6.1** 实时操作系统
@@ -9,7 +11,7 @@
 |---|---|
 | **负责人** | siweimutong |
 | **联系方式** | luoxiantong@bjut.edu.cn |
-| **开源协议** | Apache-2.0（与 ROS 2 一致） |
+| **开源协议** | Apache-2.0 |
 
 ---
 
@@ -103,5 +105,5 @@ docker exec -i rtems6-dev bash -lc \
 
 ## 许可证
 
-本项目采用 **Apache License 2.0**（与 ROS 2 的开源协议一致），详见 [LICENSE](LICENSE)。
+本项目采用 **Apache License 2.0**，详见 [LICENSE](LICENSE)。
 仓库中的第三方组件（RTEMS、ROS 2 各包、Fast-DDS 等）保留其各自的开源许可证。

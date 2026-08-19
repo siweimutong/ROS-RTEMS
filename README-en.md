@@ -1,3 +1,5 @@
+[**简体中文**](README.md) | **English**
+
 # ROS 2 on RTEMS 6.1 — Porting & Real-Time Executor
 
 A full ROS 2 (Humble) middleware stack ported to RTEMS 6.1 RTOS (ARM realview_pbx_a9_qemu), with RTExecutor eliminating nested scheduling via OS-native callback dispatch.
@@ -6,7 +8,7 @@ A full ROS 2 (Humble) middleware stack ported to RTEMS 6.1 RTOS (ARM realview_pb
 |---|---|
 | **Owner (负责人)** | siweimutong |
 | **Contact (联系方式)** | luoxiantong@bjut.edu.cn |
-| **License** | Apache-2.0 (same as ROS 2) |
+| **License** | Apache-2.0 |
 
 ---
 
