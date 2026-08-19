@@ -75,18 +75,15 @@ This project ports the complete ROS 2 (Humble) core middleware stack to RTEMS 6.
 ## 2. Prerequisite Environment Deployment (前置环境部署)
 ### Overview
 
-The prerequisite RTEMS environment can be deployed in three ways. Full
+The prerequisite RTEMS environment can be deployed in the following ways. Full
 step-by-step documents are provided in:
-- [RTEMS-DDS-README.md](RTEMS-DDS-README.md) — RTEMS 6.1 quick-start from
-  scratch (Ubuntu 22.04, `arm/realview_pbx_a9_qemu` BSP) plus DDS / ROS 2
-  component porting notes;
 - [RTEMS-README.md](RTEMS-README.md) — RTEMS 6 container build for Phytium
-  D2000 (`a53_lp64_qemu` BSP) and QEMU execution.
+  D2000 (`a53_lp64_qemu` BSP) and QEMU execution
+  (source: <https://github.com/HaochunLiang/RTContainer>).
 
 ### 2.1 RTEMS Quick-Start (From Scratch, Ubuntu 22.04)
 
-Build the RTEMS 6.1 toolchain and BSP from source (condensed from
-[RTEMS-DDS-README.md](RTEMS-DDS-README.md)):
+Build the RTEMS 6.1 toolchain and BSP from source:
 
 ```bash
 # step 1: fetch the RTEMS Source Builder (RSB) 6.1
@@ -119,9 +116,8 @@ cd $HOME/RTEMS/quick-start/src/bsd   # rtems-libbsd-6.1 unpacked here
 ```
 
 A "hello world" example and the full DDS / ROS 2 component porting procedure
-(tinyxml2, memory-main, Fast-CDR, Fast-DDS, and the 27 ROS 2 packages, built
-with `RTcolcon`) are described in detail in
-[RTEMS-DDS-README.md](RTEMS-DDS-README.md).
+(tinyxml2, memory-main, Fast-CDR, Fast-DDS, and the 27 ROS 2 packages) are
+built with `RTcolcon` — see Section 3.2 for details.
 
 ### 2.2 RTEMS 6 for Phytium D2000 (aarch64)
 
@@ -672,7 +668,6 @@ workspace/
 ├── README.md                       # This file (English version)
 ├── README-zh.md                    # Chinese version
 ├── RTEMS-README.md                 # RTEMS6 (Phytium D2000) environment deployment
-├── RTEMS-DDS-README.md             # RTEMS 6.1 quick-start + DDS / ROS 2 component porting
 ├── build_all.sh                    # Unified build entry-point script
 ├── build_all_exp*.sh               # Per-experiment-family batch build scripts
 ├── run_all.sh                      # Exp_Inter batch runner script
@@ -1011,4 +1006,3 @@ docker exec -it rtems6-dev bash -lc \
   - `intra_process_demo/README.md` — Intra-process communication demo details
   - `rclcpp-rtems/README.md` — RTExecutor + DDS notification mechanism
   - `RTEMS-README.md` — RTEMS6 (Phytium D2000) environment deployment
-  - `RTEMS-DDS-README.md` — RTEMS 6.1 quick-start + DDS / ROS 2 component porting

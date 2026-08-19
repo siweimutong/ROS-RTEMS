@@ -1,6 +1,8 @@
 Real-Time Container based on RTEMS6 for Phytium-d2000
 ===============================================
 
+Source: https://github.com/HaochunLiang/RTContainer
+
 ## 1. Real-Time Executive for Multiprocessing Systems
 Project git repositories are located at:
 
@@ -44,7 +46,7 @@ docker exec -it -e "TERM=xterm-256color" rtems6-dev bash
 step.2 pull phytium version source code
 ```bash
 cd /usr/src
-git clone https://github.com/The-Lyc/RTContainer.git rtems6
+git clone https://github.com/HaochunLiang/RTContainer.git rtems6
 ```
 
 step.3 set config.ini

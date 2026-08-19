@@ -28,11 +28,8 @@
 
 ## 前置环境部署
 
-环境部署有两种途径，详细步骤请参阅：
+环境部署的详细步骤请参阅：
 
-- **从零搭建 RTEMS 6.1（Ubuntu 22.04）**：见 [RTEMS-DDS-README.md](RTEMS-DDS-README.md)
-  —— 使用 RTEMS Source Builder（RSB）构建工具链与
-  `arm/realview_pbx_a9_qemu` BSP，并完成 libbsd 与 DDS 各组件的移植编译；
 - **RTEMS 6 容器（Phytium D2000 / aarch64）**：见 [RTEMS-README.md](RTEMS-README.md)
   —— 基于 `roker405/rtems6-env:v1.0` 镜像的 `a53_lp64_qemu` BSP 构建与 QEMU 运行；
 - **开箱即用的 Docker 开发环境（推荐）**：见 [README-en.md](README-en.md) 第 2 章
@@ -44,7 +41,6 @@
 ├── README.md                 # 本文件（中文简介）
 ├── README-en.md              # 完整英文文档（构建/运行/排错）
 ├── RTEMS-README.md           # RTEMS6 (Phytium D2000) 环境部署
-├── RTEMS-DDS-README.md       # RTEMS 6.1 quick-start + DDS/ROS2 组件移植
 ├── build_all.sh              # 统一编译入口脚本
 ├── build_all_exp*.sh         # 各实验组批量编译脚本
 ├── run_all*.sh               # 各实验组批量运行脚本
