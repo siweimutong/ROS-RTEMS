@@ -2,8 +2,9 @@
 
 | | |
 |---|---|
-| **开发人员** | siweimutong |
-| **联系方式** | luoxiantong@bjut.edu.cn |
+| **开发人员** | Xiantong Luo, Xu Jiang, Zixing Yang |
+| **联系方式** | luoxiantong@bjut.edu.cn, jiangxu@uestc.edu.cn |
+| **机构** | University of Electronic Science and Technology of China |
 
 ## 1. Implementation of Priority-Driven Chain-Aware scheduling
 ### Setup
