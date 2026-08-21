@@ -8,8 +8,8 @@ A full ROS 2 (Humble) middleware stack ported to RTEMS 6.1 RTOS (ARM realview_pb
 
 | | |
 |---|---|
-| **Developer** | Xiantong Luo, Xu Jiang, Zixing Yang |
-| **Contact** | luoxiantong@bjut.edu.cn, jiangxu@uestc.edu.cn |
+| **Developer** | Xu Jiang, Xiantong Luo, Zixing Yang |
+| **Contact** | jiangxu@uestc.edu.cn, luoxiantong@bjut.edu.cn|
 | **Institution** | University of Electronic Science and Technology of China |
 | **License** | Apache-2.0 |
 
